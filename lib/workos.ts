@@ -7,13 +7,14 @@ import {
   getSignUpUrl as authkitGetSignUpUrl,
   getWorkOS,
   handleAuth,
+  saveSession,
   signOut as authkitSignOut,
   switchToOrganization as authkitSwitchToOrganization,
   withAuth,
 } from "@workos-inc/authkit-nextjs";
 import type { Invitation, OrganizationMembership } from "@workos-inc/node";
 
-export { handleAuth };
+export { handleAuth, saveSession };
 export const switchToOrganization = authkitSwitchToOrganization;
 
 export type TenantStatus = "active" | "suspended" | "terminated";
