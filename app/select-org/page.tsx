@@ -22,8 +22,15 @@ export default async function SelectOrg({
     redirect("/onboarding");
   }
   if (active.length === 1) {
-    // Auto-pin and redirect; switchToOrganization throws redirect.
-    await switchOrgAction(active[0].organizationId, returnTo);
+    // Auto-pin via the /switch-org route handler. We can't call
+    // switchToOrganization directly from a Server Component render — it
+    // rotates the session cookie, which Next only allows in Route Handlers
+    // or Server Actions.
+    const params = new URLSearchParams({
+      org: active[0].organizationId,
+      returnTo,
+    });
+    redirect(`/switch-org?${params.toString()}`);
   }
 
   return (

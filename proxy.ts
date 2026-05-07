@@ -30,6 +30,7 @@ const PUBLIC_PATHS = new Set([
   "/sign-up",
   "/sign-out",
   "/callback",
+  "/switch-org",
   "/forbidden",
   "/not-found",
   "/select-org",
