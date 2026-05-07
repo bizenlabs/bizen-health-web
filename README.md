@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bizen Health Web
 
-## Getting Started
+Web frontend for the Bizen hospital/clinic management platform. Acts as a BFF for a separate Spring Boot Modulith backend; auth and tenant management are handled via WorkOS AuthKit.
 
-First, run the development server:
+Stack: Next.js 16 (App Router) · React 19 · Tailwind v4 · TypeScript · pnpm.
+
+## Quickstart
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local        # then fill in real values (see below)
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Required environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copy `.env.example` and fill in. All `WORKOS_*` values come from the WorkOS dashboard (<https://dashboard.workos.com>).
 
-## Learn More
+| Variable                 | Notes                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`    | Origin Next.js runs on (e.g. `http://localhost:3000`).                                      |
+| `WORKOS_API_KEY`         | Server-only.                                                                                |
+| `WORKOS_CLIENT_ID`       |                                                                                             |
+| `WORKOS_REDIRECT_URI`    | Must match the Redirect URI registered in WorkOS. Default `http://localhost:3000/callback`. |
+| `WORKOS_COOKIE_PASSWORD` | 32+ char random. Generate with `openssl rand -base64 32`.                                   |
+| `WORKOS_WEBHOOK_SECRET`  | From WorkOS Settings → Webhooks.                                                            |
+| `WORKOS_JWKS_URL`        | Used by Spring Boot to validate JWTs.                                                       |
+| `SPRING_BASE_URL`        | Backend origin. Default `http://localhost:8080`.                                            |
 
-To learn more about Next.js, take a look at the following resources:
+### First tenant (manual, for local dev)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. In the WorkOS dashboard, create an Organization (e.g. `bizen-demo`).
+2. On the Organization, set `metadata.tenant_slug` to `demo` and `metadata.tenant_status` to `active`.
+3. Invite yourself as a member with role `tenant_admin` (or `super_admin` if you want to access `/admin`).
+4. Sign in at <http://localhost:3000/sign-in> — you should land at `/demo`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Architecture
 
-## Deploy on Vercel
+See `docs/PLAN.md` for the full architecture and auth/tenant design. TL;DR:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Path-based tenancy**: every authenticated URL is `/<tenant-slug>/...`.
+- **WorkOS Organization == 1 tenant.** JWT `org_id` claim is authoritative.
+- **`proxy.ts`** (Next 16's renamed `middleware.ts`) is the tenant + auth gate. Reserved slugs, slug-vs-claim redirects, suspended-tenant rewrites, header stamping (`x-tenant-id`, `x-tenant-slug`, `x-user-role`).
+- **`lib/api.ts`** is the only path the FE talks to Spring Boot. Adds `Authorization: Bearer <jwt>` + `X-Tenant-Id`. Browser never hits Spring directly.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Common tasks
+
+```bash
+pnpm dev                  # dev server
+pnpm build                # production build
+pnpm exec tsc --noEmit    # type-check
+pnpm lint                 # eslint
+pnpm format               # prettier write
+pnpm format:check         # prettier check
+```
+
+## Folder layout
+
+```
+app/                          App Router
+├─ (marketing)/               public landing
+├─ (auth)/                    WorkOS sign-in/sign-out/callback
+├─ (app)/[tenant]/            authenticated tenant pages
+├─ (admin)/admin/             super_admin console
+├─ api/{workos,health}/       webhooks + liveness
+proxy.ts                      tenant + auth gate (Next 16)
+lib/
+├─ env.ts                     Zod-validated env
+├─ workos.ts                  server-side WorkOS adapter (only file importing @workos-inc/* on the server)
+├─ workos-client.ts           client-side WorkOS hooks (useAuth, etc.)
+├─ auth.ts                    requireSession / requireRole / hasRole
+├─ tenant.ts                  getActiveTenant / requireActiveTenant
+└─ api.ts                     server-only fetch wrapper for Spring Boot
+components/
+└─ auth/Can.tsx               UX-only RBAC component
+types/auth.ts                 shared type union for Role
+```
+
+## Conventions
+
+See [`AGENTS.md`](./AGENTS.md). Key rules: `proxy.ts` (not middleware), Next 16 async params/cookies/headers, WorkOS access only via `lib/workos.*`, FE role checks are UX-only.
