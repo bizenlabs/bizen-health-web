@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { requireSession } from "@/lib/auth";
-import { listMemberships } from "@/lib/workos";
-import { OrgSwitcher } from "@/components/shell/OrgSwitcher";
+import { listMemberships, workos } from "@/lib/workos";
+import { AppShell } from "@/components/shell/AppShell";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const session = await requireSession();
@@ -15,32 +14,33 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     redirect("/suspended");
   }
 
-  const memberships = await listMemberships(session.userId);
+  const [memberships, user] = await Promise.all([
+    listMemberships(session.userId),
+    workos.userManagement.getUser(session.userId),
+  ]);
+
+  const current = memberships.find(
+    (m) => m.organizationId === session.organizationId,
+  );
+  const currentOrgName =
+    current?.organizationName ?? session.tenantSlug ?? "Workspace";
+  const fullName =
+    [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
 
   return (
-    <div className="flex min-h-svh flex-col">
-      <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <nav className="flex items-center gap-4 text-sm">
-          <Link href="/dashboard" className="font-semibold">
-            Bizen
-          </Link>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/settings">Settings</Link>
-          {session.role === "tenant_admin" ? (
-            <Link href="/settings/team">Team</Link>
-          ) : null}
-        </nav>
-        <OrgSwitcher
-          currentOrgId={session.organizationId}
-          currentOrgSlug={session.tenantSlug}
-          memberships={memberships.map((m) => ({
-            organizationId: m.organizationId,
-            organizationName: m.organizationName,
-            status: m.status,
-          }))}
-        />
-      </header>
-      <main className="flex-1">{children}</main>
-    </div>
+    <AppShell
+      currentOrgId={session.organizationId}
+      currentOrgName={currentOrgName}
+      currentOrgSlug={session.tenantSlug}
+      memberships={memberships.map((m) => ({
+        organizationId: m.organizationId,
+        organizationName: m.organizationName,
+        status: m.status,
+      }))}
+      isTenantAdmin={session.role === "tenant_admin"}
+      user={{ name: fullName, email: user.email }}
+    >
+      {children}
+    </AppShell>
   );
 }
