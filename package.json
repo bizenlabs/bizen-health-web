@@ -12,9 +12,13 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@workos-inc/authkit-nextjs": "^4.0.1",
+    "@workos-inc/node": "^9.2.0",
     "next": "16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
