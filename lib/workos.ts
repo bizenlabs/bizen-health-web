@@ -4,18 +4,20 @@ import type { NextRequest } from "next/server";
 import {
   authkit,
   getSignInUrl as authkitGetSignInUrl,
+  getSignUpUrl as authkitGetSignUpUrl,
   getWorkOS,
   handleAuth,
   signOut as authkitSignOut,
   switchToOrganization as authkitSwitchToOrganization,
   withAuth,
 } from "@workos-inc/authkit-nextjs";
-import type { OrganizationMembership } from "@workos-inc/node";
+import type { Invitation, OrganizationMembership } from "@workos-inc/node";
 
 export { handleAuth };
 export const switchToOrganization = authkitSwitchToOrganization;
 
 export type TenantStatus = "active" | "suspended" | "terminated";
+export type OrgType = "individual" | "clinic";
 
 export type SessionClaims = {
   userId: string;
@@ -26,12 +28,14 @@ export type SessionClaims = {
   permissions: string[];
   tenantSlug: string | null;
   tenantStatus: TenantStatus | null;
+  orgType: OrgType | null;
   accessToken: string;
 };
 
 type OrgMetadata = {
   tenant_slug?: string;
   tenant_status?: TenantStatus;
+  org_type?: OrgType;
 };
 
 const fetchOrgMetadata = cache(
@@ -46,6 +50,27 @@ export const listMemberships = cache(
   async (userId: string): Promise<OrganizationMembership[]> => {
     const page = await getWorkOS().userManagement.listOrganizationMemberships({
       userId,
+    });
+    return page.data;
+  },
+);
+
+// Memberships for an organization (everyone in this tenant). Used by
+// /settings/team. Cached per-request.
+export const listOrgMembers = cache(
+  async (organizationId: string): Promise<OrganizationMembership[]> => {
+    const page = await getWorkOS().userManagement.listOrganizationMemberships({
+      organizationId,
+    });
+    return page.data;
+  },
+);
+
+// Pending invitations for an organization. Cached per-request.
+export const listOrgInvitations = cache(
+  async (organizationId: string): Promise<Invitation[]> => {
+    const page = await getWorkOS().userManagement.listInvitations({
+      organizationId,
     });
     return page.data;
   },
@@ -66,6 +91,7 @@ export async function getSession(): Promise<SessionClaims | null> {
     permissions: info.permissions ?? [],
     tenantSlug: meta.tenant_slug ?? null,
     tenantStatus: meta.tenant_status ?? null,
+    orgType: meta.org_type ?? null,
     accessToken: info.accessToken,
   };
 }
@@ -79,6 +105,12 @@ export async function getSignInUrl(opts?: {
   redirectTo?: string;
 }): Promise<string> {
   return authkitGetSignInUrl({ returnTo: opts?.redirectTo });
+}
+
+export async function getSignUpUrl(opts?: {
+  redirectTo?: string;
+}): Promise<string> {
+  return authkitGetSignUpUrl({ returnTo: opts?.redirectTo });
 }
 
 export const signOut = authkitSignOut;
@@ -109,6 +141,7 @@ export async function authenticateRequest(request: NextRequest): Promise<{
       permissions: session.permissions ?? [],
       tenantSlug: meta.tenant_slug ?? null,
       tenantStatus: meta.tenant_status ?? null,
+      orgType: meta.org_type ?? null,
       accessToken: session.accessToken,
     },
     responseHeaders: headers,

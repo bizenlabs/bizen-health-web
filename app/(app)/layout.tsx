@@ -26,6 +26,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </Link>
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/settings">Settings</Link>
+          {session.role === "tenant_admin" ? (
+            <Link href="/settings/team">Team</Link>
+          ) : null}
         </nav>
         <OrgSwitcher
           currentOrgId={session.organizationId}

@@ -9,12 +9,20 @@ export default function MarketingHome() {
       <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
         Hospital and clinic management, without the legacy.
       </p>
-      <Link
-        href="/sign-in"
-        className="mt-8 inline-flex h-11 items-center justify-center rounded-full bg-zinc-900 px-6 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
-      >
-        Sign in
-      </Link>
+      <div className="mt-8 flex items-center gap-3">
+        <Link
+          href="/sign-up"
+          className="inline-flex h-11 items-center justify-center rounded-full bg-zinc-900 px-6 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        >
+          Create account
+        </Link>
+        <Link
+          href="/sign-in"
+          className="inline-flex h-11 items-center justify-center rounded-full border border-zinc-300 px-6 text-sm font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+        >
+          Sign in
+        </Link>
+      </div>
     </main>
   );
 }

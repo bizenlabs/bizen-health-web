@@ -27,6 +27,7 @@ import { authenticateRequest } from "@/lib/workos";
 const PUBLIC_PATHS = new Set([
   "/",
   "/sign-in",
+  "/sign-up",
   "/sign-out",
   "/callback",
   "/forbidden",
@@ -63,8 +64,12 @@ export async function proxy(request: NextRequest) {
 
   // 1. Public paths.
   if (PUBLIC_PATHS.has(pathname)) {
-    // /sign-in: bounce already-signed-in users with a pinned org into the app.
-    if (pathname === "/sign-in" && session?.organizationId) {
+    // /sign-in or /sign-up: bounce already-signed-in users with a pinned org
+    // into the app instead of letting them re-auth.
+    if (
+      (pathname === "/sign-in" || pathname === "/sign-up") &&
+      session?.organizationId
+    ) {
       if (session.tenantStatus === "suspended") {
         return withAuthHeaders(
           NextResponse.rewrite(new URL("/suspended", request.url)),
