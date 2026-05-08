@@ -35,6 +35,9 @@ COPY . .
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Switch next.config.ts to output:'standalone'. Vercel builds leave this unset
+# so they get the default .next output.
+ENV BUILD_TARGET=docker
 
 # Build-time placeholders — must pass lib/env.ts validation but never reach
 # the runtime image. The deploy target overrides every one of these.

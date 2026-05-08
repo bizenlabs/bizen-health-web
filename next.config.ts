@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Self-contained build for Docker: emits .next/standalone/ with a minimal
-  // node_modules and a server.js entry, so the runtime image doesn't ship
-  // dev deps. See Dockerfile.
-  output: "standalone",
+  // Standalone output is only needed for the container path (Dockerfile -> ECS).
+  // Vercel wants the default .next output, so gate this on BUILD_TARGET. The
+  // Dockerfile sets BUILD_TARGET=docker; Vercel builds leave it unset.
+  output: process.env.BUILD_TARGET === "docker" ? "standalone" : undefined,
 };
 
 export default nextConfig;
