@@ -40,3 +40,6 @@ LICENSE.md
 # Container artifacts (avoid recursive copy)
 Dockerfile
 .dockerignore
+
+# Infra (CDK) — not needed inside the runtime image
+infra
