@@ -18,16 +18,16 @@ Open <http://localhost:3000>.
 
 Copy `.env.example` and fill in. All `WORKOS_*` values come from the WorkOS dashboard (<https://dashboard.workos.com>).
 
-| Variable                 | Notes                                                                                       |
-| ------------------------ | ------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_APP_URL`    | Origin Next.js runs on (e.g. `http://localhost:3000`).                                      |
-| `WORKOS_API_KEY`         | Server-only.                                                                                |
-| `WORKOS_CLIENT_ID`       |                                                                                             |
-| `WORKOS_REDIRECT_URI`    | Must match the Redirect URI registered in WorkOS. Default `http://localhost:3000/callback`. |
-| `WORKOS_COOKIE_PASSWORD` | 32+ char random. Generate with `openssl rand -base64 32`.                                   |
-| `WORKOS_WEBHOOK_SECRET`  | From WorkOS Settings → Webhooks.                                                            |
-| `WORKOS_JWKS_URL`        | Used by Spring Boot to validate JWTs.                                                       |
-| `SPRING_BASE_URL`        | Backend origin. Default `http://localhost:8080`.                                            |
+| Variable                          | Notes                                                                                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`             | Origin Next.js runs on (e.g. `http://localhost:3000`).                                                                                                                      |
+| `WORKOS_API_KEY`                  | Server-only.                                                                                                                                                                |
+| `WORKOS_CLIENT_ID`                |                                                                                                                                                                             |
+| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Must match the Redirect URI registered in WorkOS. Default `http://localhost:3000/callback`. Read by `@workos-inc/authkit-nextjs`, so the `NEXT_PUBLIC_` prefix is required. |
+| `WORKOS_COOKIE_PASSWORD`          | 32+ char random. Generate with `openssl rand -base64 32`.                                                                                                                   |
+| `WORKOS_WEBHOOK_SECRET`           | From WorkOS Settings → Webhooks.                                                                                                                                            |
+| `WORKOS_JWKS_URL`                 | Used by Spring Boot to validate JWTs.                                                                                                                                       |
+| `SPRING_BASE_URL`                 | Backend origin. Default `http://localhost:8080`.                                                                                                                            |
 
 ### First tenant (manual, for local dev)
 
