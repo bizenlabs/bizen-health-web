@@ -111,7 +111,7 @@ export class WebStack extends cdk.Stack {
         HOSTNAME: "0.0.0.0",
         PORT: String(props.containerPort),
         NEXT_PUBLIC_APP_URL: `https://${props.domainName}`,
-        WORKOS_REDIRECT_URI: `https://${props.domainName}/callback`,
+        NEXT_PUBLIC_WORKOS_REDIRECT_URI: `https://${props.domainName}/callback`,
         LOG_LEVEL: "info",
       },
       secrets: {

@@ -102,16 +102,29 @@ export async function getApiToken(): Promise<string | null> {
   return info.user ? info.accessToken : null;
 }
 
+// Derive the OAuth redirect URI from this deployment's own origin so we never
+// depend on whichever URI WorkOS happens to mark as "default" in the dashboard.
+// Local hits localhost/callback, Vercel hits its own /callback, etc.
+function callbackUrl(): string {
+  return `${process.env.NEXT_PUBLIC_APP_URL}/callback`;
+}
+
 export async function getSignInUrl(opts?: {
   redirectTo?: string;
 }): Promise<string> {
-  return authkitGetSignInUrl({ returnTo: opts?.redirectTo });
+  return authkitGetSignInUrl({
+    returnTo: opts?.redirectTo,
+    redirectUri: callbackUrl(),
+  });
 }
 
 export async function getSignUpUrl(opts?: {
   redirectTo?: string;
 }): Promise<string> {
-  return authkitGetSignUpUrl({ returnTo: opts?.redirectTo });
+  return authkitGetSignUpUrl({
+    returnTo: opts?.redirectTo,
+    redirectUri: callbackUrl(),
+  });
 }
 
 export const signOut = authkitSignOut;
