@@ -12,6 +12,10 @@ const schema = z.object({
   WORKOS_JWKS_URL: z.url(),
 
   SPRING_BASE_URL: z.url(),
+  // Shared secret the BFF stamps on `X-Bizen-Webhook-Secret` when forwarding
+  // verified WorkOS events to Spring Boot. Distinct from WORKOS_WEBHOOK_SECRET
+  // — the BFF is the trust boundary that already validated the WorkOS HMAC.
+  BIZEN_INTERNAL_WEBHOOK_SECRET: z.string().min(16),
 
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
