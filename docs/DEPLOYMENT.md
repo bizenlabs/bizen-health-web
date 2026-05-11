@@ -13,7 +13,7 @@ Browser
    ▼
 Vercel  (region bom1, Mumbai)
    ├─ Production deployment  →  app.bizenhealth.com       ← main branch
-   └─ Preview alias           →  staging.bizenhealth.com  ← develop branch
+   └─ Preview alias           →  staging.bizenhealth.com  ← dev branch
    │
    │ Next BFF: proxy.ts, Server Actions, lib/api.ts
    │ HTTPS + Bearer JWT (from WorkOS session)
@@ -28,11 +28,11 @@ Spring directly; see `AGENTS.md` for the convention.
 
 One Vercel project, linked to this repo, two Vercel environments:
 
-| Vercel env | Git source               | Domain                    |
-| ---------- | ------------------------ | ------------------------- |
-| Production | `main` branch            | `app.bizenhealth.com`     |
-| Preview    | `develop` branch (alias) | `staging.bizenhealth.com` |
-| Preview    | other branches           | auto-assigned preview URL |
+| Vercel env | Git source           | Domain                    |
+| ---------- | -------------------- | ------------------------- |
+| Production | `main` branch        | `app.bizenhealth.com`     |
+| Preview    | `dev` branch (alias) | `staging.bizenhealth.com` |
+| Preview    | other branches       | auto-assigned preview URL |
 
 `vercel.json` pins the region to `bom1` (Mumbai) so functions sit
 ~5–10 ms from the BE in `ap-south-1`.
@@ -86,7 +86,7 @@ Same for webhook endpoints (`/api/workos/webhook`).
 Vercel auto-deploys on every push:
 
 - Push to `main` → Production deployment, replaces `app.bizenhealth.com`.
-- Push to `develop` → Preview deployment, aliased to `staging.bizenhealth.com`.
+- Push to `dev` → Preview deployment, aliased to `staging.bizenhealth.com`.
 - Push to any other branch / PR → Preview deployment at an auto-assigned URL.
 
 There is no GitHub Actions workflow for the frontend.
