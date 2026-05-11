@@ -48,9 +48,28 @@ export async function POST(request: NextRequest) {
     return new Response(null, { status: 200 });
   }
 
-  // TODO(PR2): forward normalized payload to Spring Boot via lib/api once the
-  // BE endpoints exist (POST /iam/users/link, POST /iam/orgs/sync, etc.).
-  console.log("[workos webhook]", event.event);
+  try {
+    const beResponse = await fetch(`${env.SPRING_BASE_URL}/webhooks/workos`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Bizen-Webhook-Secret": env.BIZEN_INTERNAL_WEBHOOK_SECRET,
+      },
+      body: raw,
+    });
+    if (!beResponse.ok) {
+      // Log but still 200 — the WorkOS event has been verified and persisted at
+      // the BFF; let the BE outbox/retry handle transient downstream failures.
+      console.error(
+        "[workos webhook] BE forward non-2xx",
+        beResponse.status,
+        await beResponse.text().catch(() => ""),
+      );
+    }
+  } catch (err) {
+    console.error("[workos webhook] BE forward threw", err);
+  }
 
   return new Response(null, { status: 200 });
 }

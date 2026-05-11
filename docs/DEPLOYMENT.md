@@ -176,6 +176,8 @@ Browser ──▶ ALB ──▶ Fargate task (Next server)
 
 Spring Boot is the **real boundary**. `proxy.ts` is "optimistic" per Next 16 docs — it can be silently bypassed by Server Actions, so each Server Action also calls `requireSession()` / `requireRole()` from `lib/auth.ts`. (See `AGENTS.md` and `proxy.ts:16-20`.)
 
+> **Backend runtime note.** The Spring Boot side is **WebMVC (servlet stack), not WebFlux** — chosen because the workload is transactional CRUD over relational data (JPA/JDBC are blocking and pair naturally with MVC). Throughput scales via **Java 21 virtual threads** (`spring.threads.virtual.enabled=true`), which gives reactive-tier concurrency for I/O-bound handlers without the Mono/Flux programming model. Watch for `synchronized` blocks on hot paths — they pin virtual threads to carrier threads; prefer `ReentrantLock`.
+
 ### b) WorkOS callback
 
 `/callback` is a public path (`proxy.ts:33`). AuthKit exchanges the `code` for tokens, encrypts them with `WORKOS_COOKIE_PASSWORD`, and sets the session cookie. Subsequent requests hit `proxy.ts` with a session and get routed by org-pin status.
