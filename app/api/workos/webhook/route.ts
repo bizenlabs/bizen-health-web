@@ -13,7 +13,10 @@ const SUBSCRIBED_EVENTS = new Set([
 ]);
 
 export async function POST(request: NextRequest) {
-  // HMAC verification needs the raw body — must read text() before any parse.
+  // Read the raw body first so we have it for both signature verification
+  // (after parsing — the WorkOS SDK's verifyHeader calls JSON.stringify on
+  // whatever `payload` you pass, so it must be the parsed object, not the
+  // raw text) and for forwarding to Spring (we forward the raw bytes).
   const raw = await request.text();
   const sigHeader = request.headers.get("workos-signature");
 
@@ -21,20 +24,17 @@ export async function POST(request: NextRequest) {
     return new Response("Missing workos-signature header", { status: 400 });
   }
 
-  // TEMP DEBUG — remove after webhook signature verification is sorted.
-  console.log("[workos webhook debug]", {
-    secretLen: env.WORKOS_WEBHOOK_SECRET.length,
-    secretStart: env.WORKOS_WEBHOOK_SECRET.slice(0, 4),
-    secretEnd: env.WORKOS_WEBHOOK_SECRET.slice(-4),
-    sigHeader,
-    payloadLen: raw.length,
-    payloadStart: raw.slice(0, 120),
-  });
+  let event: { event: string; data: unknown };
+  try {
+    event = JSON.parse(raw);
+  } catch {
+    return new Response("Malformed JSON", { status: 400 });
+  }
 
   let valid = false;
   try {
     valid = await workos.webhooks.verifyHeader({
-      payload: raw,
+      payload: event,
       sigHeader,
       secret: env.WORKOS_WEBHOOK_SECRET,
     });
@@ -45,13 +45,6 @@ export async function POST(request: NextRequest) {
 
   if (!valid) {
     return new Response("Invalid signature", { status: 401 });
-  }
-
-  let event: { event: string; data: unknown };
-  try {
-    event = JSON.parse(raw);
-  } catch {
-    return new Response("Malformed JSON", { status: 400 });
   }
 
   if (!SUBSCRIBED_EVENTS.has(event.event)) {
