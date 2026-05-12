@@ -305,20 +305,23 @@ Single role per user in v1. Stored on WorkOS Organization Membership, surfaced a
 `.env.example` (commit, document each var):
 
 ```
-# Public
+# Public (exposed to browser)
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# WorkOS — server-only
+# WorkOS — server-only (except the NEXT_PUBLIC_ one, which the AuthKit
+# SDK reads as the default redirectUri for session refresh / callback)
 WORKOS_API_KEY=sk_test_...
 WORKOS_CLIENT_ID=client_...
-WORKOS_REDIRECT_URI=http://localhost:3000/callback
+NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback
 WORKOS_COOKIE_PASSWORD=<32+ char random — `openssl rand -base64 32`>
 WORKOS_WEBHOOK_SECRET=whsec_...
-WORKOS_JWKS_URL=https://api.workos.com/sso/jwks/<client_id>
 
 # Backend
 SPRING_BASE_URL=http://localhost:8080
-LOG_LEVEL=debug
+# Shared secret the BFF stamps on `X-Bizen-Webhook-Secret` when
+# forwarding verified WorkOS events to Spring Boot. Must equal
+# `bizen.webhook.secret` on the BE side.
+BIZEN_INTERNAL_WEBHOOK_SECRET=<32+ char random — `openssl rand -base64 32`>
 ```
 
 `lib/env.ts` validates with Zod and throws at boot.
