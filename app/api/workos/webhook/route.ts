@@ -51,14 +51,6 @@ export async function POST(request: NextRequest) {
     return new Response(null, { status: 200 });
   }
 
-  // TEMP DEBUG — remove after BE auth is sorted.
-  console.log("[workos webhook be-forward debug]", {
-    springBaseUrl: env.SPRING_BASE_URL,
-    bizenSecretLen: env.BIZEN_INTERNAL_WEBHOOK_SECRET.length,
-    bizenSecretStart: env.BIZEN_INTERNAL_WEBHOOK_SECRET.slice(0, 6),
-    bizenSecretEnd: env.BIZEN_INTERNAL_WEBHOOK_SECRET.slice(-6),
-  });
-
   try {
     const beResponse = await fetch(`${env.SPRING_BASE_URL}/webhooks/workos`, {
       method: "POST",
