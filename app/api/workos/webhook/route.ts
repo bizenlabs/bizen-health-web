@@ -21,6 +21,16 @@ export async function POST(request: NextRequest) {
     return new Response("Missing workos-signature header", { status: 400 });
   }
 
+  // TEMP DEBUG — remove after webhook signature verification is sorted.
+  console.log("[workos webhook debug]", {
+    secretLen: env.WORKOS_WEBHOOK_SECRET.length,
+    secretStart: env.WORKOS_WEBHOOK_SECRET.slice(0, 4),
+    secretEnd: env.WORKOS_WEBHOOK_SECRET.slice(-4),
+    sigHeader,
+    payloadLen: raw.length,
+    payloadStart: raw.slice(0, 120),
+  });
+
   let valid = false;
   try {
     valid = await workos.webhooks.verifyHeader({
