@@ -117,10 +117,15 @@ export type UpdatePatientInput = {
   address?: Address | null;
 };
 
-export const listPatients = (p: { page?: number; size?: number } = {}) =>
-  api<PageResponse<PatientSummary>>(
-    `/v1/patients?page=${p.page ?? 0}&size=${p.size ?? 50}`,
-  );
+export const listPatients = (
+  p: { page?: number; size?: number; q?: string } = {},
+) => {
+  const params = new URLSearchParams();
+  params.set("page", String(p.page ?? 0));
+  params.set("size", String(p.size ?? 50));
+  if (p.q && p.q.trim()) params.set("q", p.q.trim());
+  return api<PageResponse<PatientSummary>>(`/v1/patients?${params.toString()}`);
+};
 
 export const getPatient = (
   id: string,
