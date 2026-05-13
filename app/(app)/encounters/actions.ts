@@ -9,8 +9,14 @@ import {
   restoreEncounter,
   voidEncounter,
 } from "@/lib/encounters";
+import {
+  recordObservation,
+  restoreObservation,
+  voidObservation,
+} from "@/lib/observations";
 import { ApiError } from "@/lib/api";
 import type { EncounterFormState } from "./_components/encounter-form-state";
+import type { ObservationActionState } from "./_components/observation-action-state";
 
 function parseFields(formData: FormData) {
   const encounterTypeId = (formData.get("encounterTypeId") ?? "").toString();
@@ -149,6 +155,82 @@ export async function restoreEncounterAction(
   } catch (err) {
     if (err instanceof ApiError) throw err;
     throw new Error("Failed to restore encounter");
+  }
+  revalidatePath(`/encounters/${encounterId}`);
+}
+
+const OBSERVATION_OK: ObservationActionState = { error: null };
+
+export async function recordObservationAction(
+  encounterId: string,
+  _prev: ObservationActionState,
+  formData: FormData,
+): Promise<ObservationActionState> {
+  await requireSession();
+  const conceptId = (formData.get("conceptId") ?? "").toString();
+  const dataType = (formData.get("dataType") ?? "").toString();
+  const numericStr = (formData.get("valueNumeric") ?? "").toString().trim();
+  const text = (formData.get("valueText") ?? "").toString().trim() || null;
+
+  if (!conceptId) {
+    return { error: "Concept is required." };
+  }
+
+  let valueNumeric: string | null = null;
+  let valueText: string | null = null;
+  if (dataType === "NUMERIC") {
+    if (!numericStr) return { error: "Numeric value is required." };
+    if (!Number.isFinite(Number(numericStr))) {
+      return { error: "Numeric value must be a number." };
+    }
+    valueNumeric = numericStr;
+  } else if (dataType === "TEXT") {
+    if (!text) return { error: "Text value is required." };
+    valueText = text;
+  } else {
+    return { error: "Unsupported concept data type." };
+  }
+
+  try {
+    await recordObservation({
+      encounterId,
+      conceptId,
+      valueNumeric,
+      valueText,
+      observedAt: null,
+    });
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "Failed to record observation" };
+  }
+  revalidatePath(`/encounters/${encounterId}`);
+  return OBSERVATION_OK;
+}
+
+export async function voidObservationAction(
+  observationId: string,
+  encounterId: string,
+): Promise<void> {
+  await requireSession();
+  try {
+    await voidObservation(observationId);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Failed to void observation");
+  }
+  revalidatePath(`/encounters/${encounterId}`);
+}
+
+export async function restoreObservationAction(
+  observationId: string,
+  encounterId: string,
+): Promise<void> {
+  await requireSession();
+  try {
+    await restoreObservation(observationId);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Failed to restore observation");
   }
   revalidatePath(`/encounters/${encounterId}`);
 }

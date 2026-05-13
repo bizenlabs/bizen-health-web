@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getEncounter } from "@/lib/encounters";
 import { getPatient } from "@/lib/patients";
+import { listConcepts, listObservationsForEncounter } from "@/lib/observations";
 import { ApiError } from "@/lib/api";
 import { restoreEncounterAction } from "../actions";
+import { ObservationsPanel } from "../_components/observations-panel";
 import { VoidEncounterForm } from "../_components/void-encounter-form";
 
 export default async function EncounterDetailPage({
@@ -23,6 +25,12 @@ export default async function EncounterDetailPage({
   const patient = await getPatient(encounter.patientId, {
     includeVoided: true,
   });
+  const [observations, concepts] = encounter.voided
+    ? [[], []]
+    : await Promise.all([
+        listObservationsForEncounter(encounter.id),
+        listConcepts(),
+      ]);
   const patientName =
     [patient.name.givenName, patient.name.familyName]
       .filter(Boolean)
@@ -93,6 +101,14 @@ export default async function EncounterDetailPage({
           </div>
         ) : null}
       </dl>
+
+      {encounter.voided ? null : (
+        <ObservationsPanel
+          encounterId={encounter.id}
+          observations={observations}
+          concepts={concepts}
+        />
+      )}
 
       {encounter.voided ? null : (
         <VoidEncounterForm
