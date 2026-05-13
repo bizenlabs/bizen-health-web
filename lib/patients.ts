@@ -122,8 +122,13 @@ export const listPatients = (p: { page?: number; size?: number } = {}) =>
     `/v1/patients?page=${p.page ?? 0}&size=${p.size ?? 50}`,
   );
 
-export const getPatient = (id: string) =>
-  api<PatientDetail>(`/v1/patients/${id}`);
+export const getPatient = (
+  id: string,
+  opts: { includeVoided?: boolean } = {},
+) =>
+  api<PatientDetail>(
+    `/v1/patients/${id}${opts.includeVoided ? "?includeVoided=true" : ""}`,
+  );
 
 export const registerPatient = (body: RegisterPatientInput) =>
   api<PatientDetail>(`/v1/patients`, {
@@ -165,6 +170,29 @@ export const setPreferredPatientIdentifier = (
     `/v1/patients/${patientId}/identifiers/${identifierId}/preferred`,
     { method: "PUT" },
   );
+
+export const recordPatientDeath = (
+  patientId: string,
+  body: {
+    deathDate: string;
+    deathdateEstimated: boolean;
+    causeOfDeath: string | null;
+  },
+) =>
+  api<PatientDetail>(`/v1/patients/${patientId}/death`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const voidPatient = (patientId: string, reason?: string) =>
+  api<PatientDetail>(
+    `/v1/patients/${patientId}` +
+      (reason ? `?reason=${encodeURIComponent(reason)}` : ""),
+    { method: "DELETE" },
+  );
+
+export const restorePatient = (patientId: string) =>
+  api<PatientDetail>(`/v1/patients/${patientId}/restore`, { method: "POST" });
 
 export const getIdentifierTypes = () =>
   api<IdentifierType[]>(`/v1/patient-identifier-types`);

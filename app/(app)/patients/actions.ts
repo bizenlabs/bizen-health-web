@@ -5,9 +5,12 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import {
   addPatientIdentifier,
+  recordPatientDeath,
   registerPatient,
+  restorePatient,
   setPreferredPatientIdentifier,
   updatePatient,
+  voidPatient,
   voidPatientIdentifier,
   type Address,
   type Gender,
@@ -260,6 +263,60 @@ export async function setPreferredIdentifierAction(
     throw new Error("Failed to promote identifier");
   }
   revalidatePath(`/patients/${patientId}`);
+}
+
+export async function recordDeathAction(
+  patientId: string,
+  _prev: IdentifierActionState,
+  formData: FormData,
+): Promise<IdentifierActionState> {
+  await requireSession();
+  const dateStr = (formData.get("deathDate") ?? "").toString().trim();
+  if (!dateStr) return { error: "Date of death is required." };
+  const estimated = formData.get("deathdateEstimated") === "on";
+  const cause = (formData.get("causeOfDeath") ?? "").toString().trim() || null;
+
+  const iso = `${dateStr}T00:00:00Z`;
+  try {
+    await recordPatientDeath(patientId, {
+      deathDate: iso,
+      deathdateEstimated: estimated,
+      causeOfDeath: cause,
+    });
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "Failed to record death" };
+  }
+  revalidatePath(`/patients/${patientId}`);
+  return IDENTIFIER_OK;
+}
+
+export async function voidPatientAction(
+  patientId: string,
+  formData: FormData,
+): Promise<void> {
+  await requireSession();
+  const reason = (formData.get("reason") ?? "").toString().trim() || undefined;
+  try {
+    await voidPatient(patientId, reason);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Failed to void patient");
+  }
+  revalidatePath("/patients");
+  redirect("/patients");
+}
+
+export async function restorePatientAction(patientId: string): Promise<void> {
+  await requireSession();
+  try {
+    await restorePatient(patientId);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Failed to restore patient");
+  }
+  revalidatePath(`/patients/${patientId}`);
+  revalidatePath("/patients");
 }
 
 function extractAddress(formData: FormData): Address | null {
