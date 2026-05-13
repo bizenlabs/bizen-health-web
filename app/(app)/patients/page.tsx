@@ -9,8 +9,19 @@ export default async function PatientsPage({
   const sp = await searchParams;
   const rawQ = sp.q;
   const q = Array.isArray(rawQ) ? rawQ[0] : rawQ;
-  const page = await listPatients({ page: 0, size: 50, q });
+  const rawPage = sp.page;
+  const pageParam = Array.isArray(rawPage) ? rawPage[0] : rawPage;
+  const requestedPage = Math.max(0, Number(pageParam) || 0);
+  const page = await listPatients({ page: requestedPage, size: 50, q });
   const searching = !!(q && q.trim());
+
+  const buildPageHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (searching) params.set("q", q!.trim());
+    if (p > 0) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/patients?${qs}` : "/patients";
+  };
 
   return (
     <div className="px-6 py-10">
@@ -82,23 +93,61 @@ export default async function PatientsPage({
           </div>
         )
       ) : (
-        <div className="mt-6 overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
-          <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-            <thead className="bg-zinc-50 text-left text-xs font-medium tracking-wide text-zinc-500 uppercase dark:bg-zinc-900">
-              <tr>
-                <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">DOB / age</th>
-                <th className="px-4 py-2">Gender</th>
-                <th className="px-4 py-2">Primary ID</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {page.content.map((p) => (
-                <PatientRow key={p.id} patient={p} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="mt-6 overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
+              <thead className="bg-zinc-50 text-left text-xs font-medium tracking-wide text-zinc-500 uppercase dark:bg-zinc-900">
+                <tr>
+                  <th className="px-4 py-2">Name</th>
+                  <th className="px-4 py-2">DOB / age</th>
+                  <th className="px-4 py-2">Gender</th>
+                  <th className="px-4 py-2">Primary ID</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {page.content.map((p) => (
+                  <PatientRow key={p.id} patient={p} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {page.totalPages > 1 ? (
+            <nav
+              aria-label="Pagination"
+              className="mt-4 flex items-center justify-between text-sm"
+            >
+              <span className="text-zinc-500">
+                Page {page.page + 1} of {page.totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                {page.page > 0 ? (
+                  <Link
+                    href={buildPageHref(page.page - 1)}
+                    className="rounded-md border border-zinc-200 px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  >
+                    ← Previous
+                  </Link>
+                ) : (
+                  <span className="rounded-md border border-zinc-100 px-3 py-1.5 text-zinc-300 dark:border-zinc-900 dark:text-zinc-700">
+                    ← Previous
+                  </span>
+                )}
+                {page.page + 1 < page.totalPages ? (
+                  <Link
+                    href={buildPageHref(page.page + 1)}
+                    className="rounded-md border border-zinc-200 px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  >
+                    Next →
+                  </Link>
+                ) : (
+                  <span className="rounded-md border border-zinc-100 px-3 py-1.5 text-zinc-300 dark:border-zinc-900 dark:text-zinc-700">
+                    Next →
+                  </span>
+                )}
+              </div>
+            </nav>
+          ) : null}
+        </>
       )}
     </div>
   );
