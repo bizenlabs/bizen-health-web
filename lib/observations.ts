@@ -40,6 +40,22 @@ export const listConcepts = () => api<Concept[]>(`/v1/concepts`);
 export const listObservationsForEncounter = (encounterId: string) =>
   api<Observation[]>(`/v1/observations?encounterId=${encounterId}`);
 
+type ObservationsPage = {
+  content: Observation[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+export const listObservationsForPatient = (
+  patientId: string,
+  p: { page?: number; size?: number } = {},
+) =>
+  api<ObservationsPage>(
+    `/v1/observations?patientId=${patientId}&page=${p.page ?? 0}&size=${p.size ?? 50}`,
+  );
+
 export const recordObservation = (body: RecordObservationInput) =>
   api<Observation>(`/v1/observations`, {
     method: "POST",
