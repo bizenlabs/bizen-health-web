@@ -107,6 +107,16 @@ export type RegisterPatientInput = {
   identifiers?: { typeId: string; value: string; preferred: boolean }[];
 };
 
+// Section-level partial update: each top-level field is optional. When
+// present, the sub-object fully replaces that section on the aggregate;
+// any field omitted within a present sub-object lands as null. Identifiers
+// and death are managed via separate endpoints (not exposed yet).
+export type UpdatePatientInput = {
+  demographics?: RegisterPatientInput["demographics"];
+  name?: RegisterPatientInput["name"];
+  address?: Address | null;
+};
+
 export const listPatients = (p: { page?: number; size?: number } = {}) =>
   api<PageResponse<PatientSummary>>(
     `/v1/patients?page=${p.page ?? 0}&size=${p.size ?? 50}`,
@@ -118,6 +128,12 @@ export const getPatient = (id: string) =>
 export const registerPatient = (body: RegisterPatientInput) =>
   api<PatientDetail>(`/v1/patients`, {
     method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updatePatient = (id: string, body: UpdatePatientInput) =>
+  api<PatientDetail>(`/v1/patients/${id}`, {
+    method: "PATCH",
     body: JSON.stringify(body),
   });
 

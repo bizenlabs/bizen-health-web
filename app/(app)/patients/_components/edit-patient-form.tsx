@@ -2,20 +2,14 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import type { IdentifierType } from "@/lib/patients";
-import { registerPatientAction } from "../actions";
+import Link from "next/link";
+import type { PatientDetail } from "@/lib/patients";
+import { updatePatientAction } from "../actions";
 
-type RegisterPatientFormState = {
-  error: string | null;
-  fieldErrors: Record<string, string>;
-};
+type State = { error: string | null; fieldErrors: Record<string, string> };
+const INITIAL_STATE: State = { error: null, fieldErrors: {} };
 
-const INITIAL_STATE: RegisterPatientFormState = {
-  error: null,
-  fieldErrors: {},
-};
-
-const GENDERS: { value: string; label: string }[] = [
+const GENDERS = [
   { value: "", label: "—" },
   { value: "FEMALE", label: "Female" },
   { value: "MALE", label: "Male" },
@@ -31,21 +25,23 @@ function SubmitButton() {
       disabled={pending}
       className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
     >
-      {pending ? "Registering…" : "Register patient"}
+      {pending ? "Saving…" : "Save changes"}
     </button>
   );
 }
 
-export function RegisterPatientForm({
-  identifierTypes,
-}: {
-  identifierTypes: IdentifierType[];
-}) {
-  const [state, formAction] = useActionState(
-    registerPatientAction,
-    INITIAL_STATE,
-  );
-  const [useEstimatedAge, setUseEstimatedAge] = useState(false);
+export function EditPatientForm({ patient }: { patient: PatientDetail }) {
+  const action = updatePatientAction.bind(null, patient.id);
+  const [state, formAction] = useActionState(action, INITIAL_STATE);
+
+  const initiallyEstimated =
+    !!patient.demographics.birthdate && patient.demographics.birthdateEstimated;
+  const [useEstimatedAge, setUseEstimatedAge] = useState(initiallyEstimated);
+
+  const initialAgeYears = initiallyEstimated
+    ? new Date().getFullYear() -
+      Number(patient.demographics.birthdate!.slice(0, 4))
+    : null;
 
   return (
     <form action={formAction} className="mt-6 max-w-2xl space-y-6">
@@ -53,20 +49,22 @@ export function RegisterPatientForm({
         <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
           Name
         </h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          At least one of given or family name is required. Names are stored
-          exactly as entered — no normalisation.
-        </p>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
           <Field
             label="Given name"
             name="givenName"
+            defaultValue={patient.name.givenName ?? ""}
             error={state.fieldErrors.givenName}
           />
-          <Field label="Middle name" name="middleName" />
+          <Field
+            label="Middle name"
+            name="middleName"
+            defaultValue={patient.name.middleName ?? ""}
+          />
           <Field
             label="Family name"
             name="familyName"
+            defaultValue={patient.name.familyName ?? ""}
             error={state.fieldErrors.familyName}
           />
         </div>
@@ -84,7 +82,7 @@ export function RegisterPatientForm({
             <select
               id="gender"
               name="gender"
-              defaultValue=""
+              defaultValue={patient.demographics.gender ?? ""}
               className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
             >
               {GENDERS.map((g) => (
@@ -119,6 +117,7 @@ export function RegisterPatientForm({
                   type="number"
                   min={0}
                   max={130}
+                  defaultValue={initialAgeYears ?? ""}
                   className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
                 />
               </div>
@@ -134,6 +133,12 @@ export function RegisterPatientForm({
                   id="birthdate"
                   name="birthdate"
                   type="date"
+                  defaultValue={
+                    patient.demographics.birthdate &&
+                    !patient.demographics.birthdateEstimated
+                      ? patient.demographics.birthdate
+                      : ""
+                  }
                   className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
                 />
               </div>
@@ -142,49 +147,19 @@ export function RegisterPatientForm({
         </div>
       </section>
 
-      <AddressSection />
-
-      {identifierTypes.length > 0 ? (
-        <section>
-          <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-            Identifier (optional)
-          </h2>
-          <p className="mt-1 text-xs text-zinc-500">
-            Add a single identifier now; more can be added from the patient
-            detail page later.
-          </p>
-          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div>
-              <label
-                htmlFor="identifierTypeId"
-                className="block text-xs text-zinc-500"
-              >
-                Type
-              </label>
-              <select
-                id="identifierTypeId"
-                name="identifierTypeId"
-                defaultValue=""
-                className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-              >
-                <option value="">— None —</option>
-                {identifierTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Field label="Value" name="identifierValue" />
-          </div>
-        </section>
-      ) : null}
+      <AddressSection address={patient.address} />
 
       {state.error ? (
         <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
       ) : null}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
+        <Link
+          href={`/patients/${patient.id}`}
+          className="rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+        >
+          Cancel
+        </Link>
         <SubmitButton />
       </div>
     </form>
@@ -221,22 +196,8 @@ function Field({
   );
 }
 
-function AddressSection({
-  defaultValues,
-}: {
-  defaultValues?: {
-    address1?: string | null;
-    address2?: string | null;
-    cityVillage?: string | null;
-    countyDistrict?: string | null;
-    stateProvince?: string | null;
-    country?: string | null;
-    postalCode?: string | null;
-  };
-}) {
-  const hasAny = defaultValues
-    ? Object.values(defaultValues).some((v) => v)
-    : false;
+function AddressSection({ address }: { address: PatientDetail["address"] }) {
+  const hasAny = Object.values(address).some((v) => v);
   const [open, setOpen] = useState(hasAny);
   return (
     <section>
@@ -252,37 +213,37 @@ function AddressSection({
           <Field
             label="Line 1"
             name="address1"
-            defaultValue={defaultValues?.address1 ?? ""}
+            defaultValue={address.address1 ?? ""}
           />
           <Field
             label="Line 2"
             name="address2"
-            defaultValue={defaultValues?.address2 ?? ""}
+            defaultValue={address.address2 ?? ""}
           />
           <Field
             label="City / village"
             name="cityVillage"
-            defaultValue={defaultValues?.cityVillage ?? ""}
+            defaultValue={address.cityVillage ?? ""}
           />
           <Field
             label="District"
             name="countyDistrict"
-            defaultValue={defaultValues?.countyDistrict ?? ""}
+            defaultValue={address.countyDistrict ?? ""}
           />
           <Field
             label="State / province"
             name="stateProvince"
-            defaultValue={defaultValues?.stateProvince ?? ""}
+            defaultValue={address.stateProvince ?? ""}
           />
           <Field
             label="Country"
             name="country"
-            defaultValue={defaultValues?.country ?? ""}
+            defaultValue={address.country ?? ""}
           />
           <Field
             label="Postal code"
             name="postalCode"
-            defaultValue={defaultValues?.postalCode ?? ""}
+            defaultValue={address.postalCode ?? ""}
           />
         </div>
       ) : null}
