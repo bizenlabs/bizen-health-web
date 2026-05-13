@@ -2,9 +2,15 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { listPatients, type PatientSummary } from "@/lib/patients";
 
-export default async function PatientsPage() {
+export default async function PatientsPage({
+  searchParams,
+}: PageProps<"/patients">) {
   await requireSession();
-  const page = await listPatients({ page: 0, size: 50 });
+  const sp = await searchParams;
+  const rawQ = sp.q;
+  const q = Array.isArray(rawQ) ? rawQ[0] : rawQ;
+  const page = await listPatients({ page: 0, size: 50, q });
+  const searching = !!(q && q.trim());
 
   return (
     <div className="px-6 py-10">
@@ -12,9 +18,13 @@ export default async function PatientsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Patients</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            {page.totalElements === 0
-              ? "No patients yet."
-              : `${page.totalElements} total`}
+            {searching
+              ? page.totalElements === 0
+                ? `No matches for "${q}".`
+                : `${page.totalElements} match${page.totalElements === 1 ? "" : "es"} for "${q}"`
+              : page.totalElements === 0
+                ? "No patients yet."
+                : `${page.totalElements} total`}
           </p>
         </div>
         <Link
@@ -25,18 +35,52 @@ export default async function PatientsPage() {
         </Link>
       </div>
 
-      {page.content.length === 0 ? (
-        <div className="mt-12 rounded-md border border-dashed border-zinc-300 px-6 py-12 text-center dark:border-zinc-700">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Register your first patient to get started.
-          </p>
+      <form
+        method="get"
+        action="/patients"
+        className="mt-6 flex max-w-md items-center gap-2"
+      >
+        <input
+          type="search"
+          name="q"
+          defaultValue={q ?? ""}
+          placeholder="Search by name or identifier"
+          className="flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
+        />
+        <button
+          type="submit"
+          className="rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+        >
+          Search
+        </button>
+        {searching ? (
           <Link
-            href="/patients/new"
-            className="mt-3 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            href="/patients"
+            className="text-xs text-zinc-500 hover:underline"
           >
-            Register first patient
+            Clear
           </Link>
-        </div>
+        ) : null}
+      </form>
+
+      {page.content.length === 0 ? (
+        searching ? (
+          <div className="mt-8 text-sm text-zinc-500">
+            Try a different name or identifier.
+          </div>
+        ) : (
+          <div className="mt-12 rounded-md border border-dashed border-zinc-300 px-6 py-12 text-center dark:border-zinc-700">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Register your first patient to get started.
+            </p>
+            <Link
+              href="/patients/new"
+              className="mt-3 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Register first patient
+            </Link>
+          </div>
+        )
       ) : (
         <div className="mt-6 overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
           <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
