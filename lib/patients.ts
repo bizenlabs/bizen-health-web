@@ -118,12 +118,18 @@ export type UpdatePatientInput = {
 };
 
 export const listPatients = (
-  p: { page?: number; size?: number; q?: string } = {},
+  p: {
+    page?: number;
+    size?: number;
+    q?: string;
+    voided?: boolean;
+  } = {},
 ) => {
   const params = new URLSearchParams();
   params.set("page", String(p.page ?? 0));
   params.set("size", String(p.size ?? 50));
   if (p.q && p.q.trim()) params.set("q", p.q.trim());
+  if (p.voided) params.set("voided", "true");
   return api<PageResponse<PatientSummary>>(`/v1/patients?${params.toString()}`);
 };
 
