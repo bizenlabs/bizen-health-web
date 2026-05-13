@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import {
+  addPatientIdentifier,
   registerPatient,
+  setPreferredPatientIdentifier,
   updatePatient,
+  voidPatientIdentifier,
   type Address,
   type Gender,
   type RegisterPatientInput,
@@ -204,6 +207,59 @@ export async function updatePatientAction(
   revalidatePath(`/patients/${patientId}`);
   revalidatePath("/patients");
   redirect(`/patients/${patientId}`);
+}
+
+type IdentifierActionState = { error: string | null };
+const IDENTIFIER_OK: IdentifierActionState = { error: null };
+
+export async function addIdentifierAction(
+  patientId: string,
+  _prev: IdentifierActionState,
+  formData: FormData,
+): Promise<IdentifierActionState> {
+  await requireSession();
+  const typeId = (formData.get("typeId") ?? "").toString();
+  const value = (formData.get("value") ?? "").toString().trim();
+  const preferred = formData.get("preferred") === "on";
+  if (!typeId || !value) {
+    return { error: "Type and value are both required." };
+  }
+  try {
+    await addPatientIdentifier(patientId, { typeId, value, preferred });
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: "Failed to add identifier" };
+  }
+  revalidatePath(`/patients/${patientId}`);
+  return IDENTIFIER_OK;
+}
+
+export async function voidIdentifierAction(
+  patientId: string,
+  identifierId: string,
+): Promise<void> {
+  await requireSession();
+  try {
+    await voidPatientIdentifier(patientId, identifierId);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Failed to void identifier");
+  }
+  revalidatePath(`/patients/${patientId}`);
+}
+
+export async function setPreferredIdentifierAction(
+  patientId: string,
+  identifierId: string,
+): Promise<void> {
+  await requireSession();
+  try {
+    await setPreferredPatientIdentifier(patientId, identifierId);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Failed to promote identifier");
+  }
+  revalidatePath(`/patients/${patientId}`);
 }
 
 function extractAddress(formData: FormData): Address | null {
