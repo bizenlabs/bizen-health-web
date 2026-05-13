@@ -137,5 +137,34 @@ export const updatePatient = (id: string, body: UpdatePatientInput) =>
     body: JSON.stringify(body),
   });
 
+export const addPatientIdentifier = (
+  patientId: string,
+  body: { typeId: string; value: string; preferred: boolean },
+) =>
+  api<PatientDetail>(`/v1/patients/${patientId}/identifiers`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const voidPatientIdentifier = (
+  patientId: string,
+  identifierId: string,
+  reason?: string,
+) =>
+  api<PatientDetail>(
+    `/v1/patients/${patientId}/identifiers/${identifierId}` +
+      (reason ? `?reason=${encodeURIComponent(reason)}` : ""),
+    { method: "DELETE" },
+  );
+
+export const setPreferredPatientIdentifier = (
+  patientId: string,
+  identifierId: string,
+) =>
+  api<PatientDetail>(
+    `/v1/patients/${patientId}/identifiers/${identifierId}/preferred`,
+    { method: "PUT" },
+  );
+
 export const getIdentifierTypes = () =>
   api<IdentifierType[]>(`/v1/patient-identifier-types`);

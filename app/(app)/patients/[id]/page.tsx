@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { getPatient } from "@/lib/patients";
+import { getIdentifierTypes, getPatient } from "@/lib/patients";
 import { ApiError } from "@/lib/api";
+import { ManageIdentifiers } from "../_components/manage-identifiers";
 
 export default async function PatientDetailPage({
   params,
@@ -19,6 +20,7 @@ export default async function PatientDetailPage({
     }
     throw err;
   }
+  const identifierTypes = await getIdentifierTypes();
 
   const fullName = composeFullName(patient.name);
 
@@ -87,28 +89,10 @@ export default async function PatientDetailPage({
         </Section>
 
         <Section title="Identifiers" className="md:col-span-2">
-          {patient.identifiers.length === 0 ? (
-            <p className="text-sm text-zinc-500">No identifiers attached.</p>
-          ) : (
-            <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-              {patient.identifiers.map((i) => (
-                <li
-                  key={i.id}
-                  className="flex items-center justify-between px-4 py-3 text-sm"
-                >
-                  <div>
-                    <div className="font-medium">{i.identifier}</div>
-                    <div className="text-xs text-zinc-500">{i.typeName}</div>
-                  </div>
-                  {i.preferred ? (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                      preferred
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
+          <ManageIdentifiers
+            patient={patient}
+            identifierTypes={identifierTypes}
+          />
         </Section>
       </div>
     </div>
