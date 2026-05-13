@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getIdentifierTypes, getPatient } from "@/lib/patients";
+import { listEncountersForPatient } from "@/lib/encounters";
 import { ApiError } from "@/lib/api";
+import { EncountersSection } from "../_components/encounters-section";
 import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
 
@@ -22,6 +24,13 @@ export default async function PatientDetailPage({
     throw err;
   }
   const identifierTypes = patient.voided ? [] : await getIdentifierTypes();
+  const encounters = patient.voided
+    ? {
+        content: [] as Awaited<
+          ReturnType<typeof listEncountersForPatient>
+        >["content"],
+      }
+    : await listEncountersForPatient(patient.id, { size: 10 });
 
   const fullName = composeFullName(patient.name);
 
@@ -103,6 +112,12 @@ export default async function PatientDetailPage({
             />
           </Section>
         )}
+
+        <EncountersSection
+          patientId={patient.id}
+          encounters={encounters.content}
+          canRecord={!patient.voided}
+        />
       </div>
     </div>
   );
