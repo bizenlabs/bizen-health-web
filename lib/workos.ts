@@ -106,7 +106,7 @@ export async function getApiToken(): Promise<string | null> {
 // depend on whichever URI WorkOS happens to mark as "default" in the dashboard.
 // Local hits localhost/callback, Vercel hits its own /callback, etc.
 function callbackUrl(): string {
-  return `${process.env.NEXT_PUBLIC_APP_URL}/callback`;
+  return `${process.env.NEXT_PUBLIC_APP_URL!.replace(/\/+$/, "")}/callback`;
 }
 
 export async function getSignInUrl(opts?: {
