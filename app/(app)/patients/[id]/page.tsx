@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getIdentifierTypes, getPatient } from "@/lib/patients";
 import { ApiError } from "@/lib/api";
+import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
 
 export default async function PatientDetailPage({
@@ -13,14 +14,14 @@ export default async function PatientDetailPage({
 
   let patient;
   try {
-    patient = await getPatient(id);
+    patient = await getPatient(id, { includeVoided: true });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       notFound();
     }
     throw err;
   }
-  const identifierTypes = await getIdentifierTypes();
+  const identifierTypes = patient.voided ? [] : await getIdentifierTypes();
 
   const fullName = composeFullName(patient.name);
 
@@ -31,12 +32,18 @@ export default async function PatientDetailPage({
       </Link>
       <div className="mt-2 flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">{fullName || "(unnamed)"}</h1>
-        <Link
-          href={`/patients/${patient.id}/edit`}
-          className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-        >
-          Edit
-        </Link>
+        {patient.voided ? null : (
+          <Link
+            href={`/patients/${patient.id}/edit`}
+            className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+          >
+            Edit
+          </Link>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <LifecycleActions patient={patient} />
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -88,12 +95,14 @@ export default async function PatientDetailPage({
           )}
         </Section>
 
-        <Section title="Identifiers" className="md:col-span-2">
-          <ManageIdentifiers
-            patient={patient}
-            identifierTypes={identifierTypes}
-          />
-        </Section>
+        {patient.voided ? null : (
+          <Section title="Identifiers" className="md:col-span-2">
+            <ManageIdentifiers
+              patient={patient}
+              identifierTypes={identifierTypes}
+            />
+          </Section>
+        )}
       </div>
     </div>
   );
