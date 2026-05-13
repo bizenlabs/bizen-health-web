@@ -9,6 +9,7 @@ import { EncountersSection } from "../_components/encounters-section";
 import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
 import { TimelineSection } from "../_components/timeline-section";
+import { VitalsTrendSection } from "../_components/vitals-trend-section";
 
 export default async function PatientDetailPage({
   params,
@@ -42,7 +43,7 @@ export default async function PatientDetailPage({
       ]
     : await Promise.all([
         listEncountersForPatient(patient.id, { size: 20 }),
-        listObservationsForPatient(patient.id, { size: 50 }),
+        listObservationsForPatient(patient.id, { size: 200 }),
       ]);
   const encountersById = Object.fromEntries(
     encounters.content.map((e) => [e.id, e]),
@@ -129,6 +130,10 @@ export default async function PatientDetailPage({
               identifierTypes={identifierTypes}
             />
           </Section>
+        )}
+
+        {patient.voided ? null : (
+          <VitalsTrendSection observations={observationsPage.content} />
         )}
 
         <EncountersSection
