@@ -1,0 +1,26 @@
+diff --git a/lib/factory-CdcF5208.mjs b/lib/factory-CdcF5208.mjs
+index e4cbe95f838aca1bf842621f947ef7ed54f02022..079a983eb4ea848cddc58ee28d89ac161f027084 100644
+--- a/lib/factory-CdcF5208.mjs
++++ b/lib/factory-CdcF5208.mjs
+@@ -358,7 +358,7 @@ var FetchHttpClientResponse = class FetchHttpClientResponse extends HttpClientRe
+ 		return this._res;
+ 	}
+ 	toJSON() {
+-		return this._res.headers.get("content-type")?.includes("application/json") ? this._res.json() : null;
++		return this._res.headers.get("content-type")?.includes("application/json") ? this._res.clone().json() : null;
+ 	}
+ 	static _transformHeadersToObject(headers) {
+ 		const headersObj = {};
+diff --git a/lib/factory-DL2F8bWI.cjs b/lib/factory-DL2F8bWI.cjs
+index c02c46ff0e3526bcf62b82be4fadcd0336f566e9..2e7d02a41de1251d56703154583bc14c933693e0 100644
+--- a/lib/factory-DL2F8bWI.cjs
++++ b/lib/factory-DL2F8bWI.cjs
+@@ -358,7 +358,7 @@ var FetchHttpClientResponse = class FetchHttpClientResponse extends HttpClientRe
+ 		return this._res;
+ 	}
+ 	toJSON() {
+-		return this._res.headers.get("content-type")?.includes("application/json") ? this._res.json() : null;
++		return this._res.headers.get("content-type")?.includes("application/json") ? this._res.clone().json() : null;
+ 	}
+ 	static _transformHeadersToObject(headers) {
+ 		const headersObj = {};

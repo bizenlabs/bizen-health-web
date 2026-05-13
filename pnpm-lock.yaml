@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@workos-inc/node@9.2.0':
+    hash: ff62cbc361e1ead99ae123ca9e4f2875c26c2222ec386d5591635537af505033
+    path: patches/@workos-inc__node@9.2.0.patch
+
 importers:
 
   .:
@@ -19,7 +24,7 @@ importers:
         version: 4.0.1(next@16.2.4(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@workos-inc/node':
         specifier: ^9.2.0
-        version: 9.2.0
+        version: 9.2.0(patch_hash=ff62cbc361e1ead99ae123ca9e4f2875c26c2222ec386d5591635537af505033)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -3407,7 +3412,7 @@ snapshots:
   '@workos-inc/authkit-nextjs@4.0.1(next@16.2.4(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
     dependencies:
       '@sindresorhus/fnv1a': 3.1.0
-      '@workos-inc/node': 9.2.0
+      '@workos-inc/node': 9.2.0(patch_hash=ff62cbc361e1ead99ae123ca9e4f2875c26c2222ec386d5591635537af505033)
       iron-session: 8.0.4
       jose: 5.10.0
       next: 16.2.4(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -3418,7 +3423,7 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@workos-inc/node@9.2.0':
+  '@workos-inc/node@9.2.0(patch_hash=ff62cbc361e1ead99ae123ca9e4f2875c26c2222ec386d5591635537af505033)':
     dependencies:
       eventemitter3: 5.0.4
 
