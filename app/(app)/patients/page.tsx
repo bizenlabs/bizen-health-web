@@ -1,0 +1,109 @@
+import Link from "next/link";
+import { requireSession } from "@/lib/auth";
+import { listPatients, type PatientSummary } from "@/lib/patients";
+
+export default async function PatientsPage() {
+  await requireSession();
+  const page = await listPatients({ page: 0, size: 50 });
+
+  return (
+    <div className="px-6 py-10">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Patients</h1>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            {page.totalElements === 0
+              ? "No patients yet."
+              : `${page.totalElements} total`}
+          </p>
+        </div>
+        <Link
+          href="/patients/new"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
+          Register patient
+        </Link>
+      </div>
+
+      {page.content.length === 0 ? (
+        <div className="mt-12 rounded-md border border-dashed border-zinc-300 px-6 py-12 text-center dark:border-zinc-700">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Register your first patient to get started.
+          </p>
+          <Link
+            href="/patients/new"
+            className="mt-3 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          >
+            Register first patient
+          </Link>
+        </div>
+      ) : (
+        <div className="mt-6 overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+          <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
+            <thead className="bg-zinc-50 text-left text-xs font-medium tracking-wide text-zinc-500 uppercase dark:bg-zinc-900">
+              <tr>
+                <th className="px-4 py-2">Name</th>
+                <th className="px-4 py-2">DOB / age</th>
+                <th className="px-4 py-2">Gender</th>
+                <th className="px-4 py-2">Primary ID</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {page.content.map((p) => (
+                <PatientRow key={p.id} patient={p} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PatientRow({ patient }: { patient: PatientSummary }) {
+  return (
+    <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-900">
+      <td className="px-4 py-2">
+        <Link
+          href={`/patients/${patient.id}`}
+          className="font-medium hover:underline"
+        >
+          {patient.preferredName}
+        </Link>
+      </td>
+      <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
+        {formatBirthdate(patient)}
+      </td>
+      <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
+        {patient.gender ? capitalize(patient.gender) : "—"}
+      </td>
+      <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
+        {patient.primaryIdentifier ? (
+          <>
+            <span className="text-xs text-zinc-500">
+              {patient.primaryIdentifierType}
+            </span>{" "}
+            {patient.primaryIdentifier}
+          </>
+        ) : (
+          "—"
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function formatBirthdate(p: PatientSummary): string {
+  if (!p.birthdate) return "—";
+  if (p.birthdateEstimated) {
+    // Birthdate set to Jan 1 of estimated-year — show as "~Ny"
+    const year = Number(p.birthdate.slice(0, 4));
+    const age = new Date().getFullYear() - year;
+    return `~${age}y`;
+  }
+  return p.birthdate;
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0) + s.slice(1).toLowerCase();
+}

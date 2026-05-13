@@ -40,6 +40,7 @@ import {
   Cog6ToothIcon,
   HomeIcon,
   UserGroupIcon,
+  UsersIcon,
 } from "@heroicons/react/20/solid";
 
 type Membership = {
@@ -177,6 +178,13 @@ export function AppShell({
               >
                 <HomeIcon />
                 <SidebarLabel>Dashboard</SidebarLabel>
+              </SidebarItem>
+              <SidebarItem
+                href="/patients"
+                current={pathname.startsWith("/patients")}
+              >
+                <UsersIcon />
+                <SidebarLabel>Patients</SidebarLabel>
               </SidebarItem>
               <SidebarItem
                 href="/settings"
