@@ -27,7 +27,15 @@ export default async function PatientDetailPage({
       <Link href="/patients" className="text-xs text-zinc-500 hover:underline">
         ← All patients
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">{fullName || "(unnamed)"}</h1>
+      <div className="mt-2 flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold">{fullName || "(unnamed)"}</h1>
+        <Link
+          href={`/patients/${patient.id}/edit`}
+          className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+        >
+          Edit
+        </Link>
+      </div>
 
       <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
         <Section title="Demographics">

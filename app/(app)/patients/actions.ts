@@ -5,8 +5,11 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import {
   registerPatient,
+  updatePatient,
+  type Address,
   type Gender,
   type RegisterPatientInput,
+  type UpdatePatientInput,
 } from "@/lib/patients";
 import { ApiError } from "@/lib/api";
 
@@ -98,6 +101,7 @@ export async function registerPatientAction(
       middleName: middleName || null,
       familyName: familyName || null,
     },
+    address: extractAddress(formData),
     identifiers,
   };
 
@@ -119,4 +123,109 @@ export async function registerPatientAction(
 
   revalidatePath("/patients");
   redirect(`/patients/${createdId}`);
+}
+
+export async function updatePatientAction(
+  patientId: string,
+  _prev: RegisterPatientFormState,
+  formData: FormData,
+): Promise<RegisterPatientFormState> {
+  await requireSession();
+
+  const givenName = (formData.get("givenName") ?? "").toString().trim();
+  const familyName = (formData.get("familyName") ?? "").toString().trim();
+  const middleName = (formData.get("middleName") ?? "").toString().trim();
+
+  if (!givenName && !familyName) {
+    return {
+      error: "Provide at least a given name or family name.",
+      fieldErrors: { givenName: "Required if family name is blank" },
+    };
+  }
+
+  const genderRaw = (formData.get("gender") ?? "").toString().trim();
+  const gender: Gender | null = VALID_GENDERS.has(genderRaw as Gender)
+    ? (genderRaw as Gender)
+    : null;
+
+  const useEstimatedAge = formData.get("useEstimatedAge") === "on";
+  const ageStr = (formData.get("estimatedAge") ?? "").toString().trim();
+  const birthdateStr = (formData.get("birthdate") ?? "").toString().trim();
+
+  let birthdate: string | null = null;
+  let birthdateEstimated = false;
+  if (useEstimatedAge && ageStr) {
+    const age = Number(ageStr);
+    if (Number.isFinite(age) && age >= 0 && age <= 130) {
+      const today = new Date();
+      const year = today.getFullYear() - Math.floor(age);
+      birthdate = `${year}-01-01`;
+      birthdateEstimated = true;
+    } else {
+      return {
+        error: "Estimated age must be between 0 and 130.",
+        fieldErrors: { estimatedAge: "Out of range" },
+      };
+    }
+  } else if (birthdateStr) {
+    birthdate = birthdateStr;
+    birthdateEstimated = false;
+  }
+
+  const body: UpdatePatientInput = {
+    demographics: {
+      gender,
+      birthdate,
+      birthdateEstimated,
+      birthtime: null,
+    },
+    name: {
+      givenName: givenName || null,
+      middleName: middleName || null,
+      familyName: familyName || null,
+    },
+    address: extractAddress(formData),
+  };
+
+  try {
+    await updatePatient(patientId, body);
+  } catch (err) {
+    if (err instanceof ApiError) {
+      return {
+        error: err.message || "Failed to update patient",
+        fieldErrors: Object.fromEntries(
+          err.fields.map((f) => [f.path, f.message]),
+        ),
+      };
+    }
+    return { error: "Failed to update patient", fieldErrors: {} };
+  }
+
+  revalidatePath(`/patients/${patientId}`);
+  revalidatePath("/patients");
+  redirect(`/patients/${patientId}`);
+}
+
+function extractAddress(formData: FormData): Address | null {
+  const fields: (keyof Address)[] = [
+    "address1",
+    "address2",
+    "address3",
+    "cityVillage",
+    "countyDistrict",
+    "stateProvince",
+    "country",
+    "postalCode",
+    "latitude",
+    "longitude",
+  ];
+  const values = fields.map(
+    (k) => (formData.get(k) ?? "").toString().trim() || null,
+  );
+  if (values.every((v) => v === null)) return null;
+  const a = {} as Address;
+  fields.forEach((k, i) => {
+    a[k] = values[i];
+  });
+  return a;
 }
