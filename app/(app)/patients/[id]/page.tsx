@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getIdentifierTypes, getPatient } from "@/lib/patients";
 import { listEncountersForPatient } from "@/lib/encounters";
+import { listObservationsForPatient } from "@/lib/observations";
 import { ApiError } from "@/lib/api";
 import { EncountersSection } from "../_components/encounters-section";
 import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
+import { TimelineSection } from "../_components/timeline-section";
 
 export default async function PatientDetailPage({
   params,
@@ -24,13 +26,29 @@ export default async function PatientDetailPage({
     throw err;
   }
   const identifierTypes = patient.voided ? [] : await getIdentifierTypes();
-  const encounters = patient.voided
-    ? {
-        content: [] as Awaited<
-          ReturnType<typeof listEncountersForPatient>
-        >["content"],
-      }
-    : await listEncountersForPatient(patient.id, { size: 10 });
+  const [encounters, observationsPage] = patient.voided
+    ? [
+        {
+          content: [] as Awaited<
+            ReturnType<typeof listEncountersForPatient>
+          >["content"],
+        },
+        {
+          content: [] as Awaited<
+            ReturnType<typeof listObservationsForPatient>
+          >["content"],
+          totalElements: 0,
+        },
+      ]
+    : await Promise.all([
+        listEncountersForPatient(patient.id, { size: 20 }),
+        listObservationsForPatient(patient.id, { size: 50 }),
+      ]);
+  const encountersById = Object.fromEntries(
+    encounters.content.map((e) => [e.id, e]),
+  );
+  const observationsTruncated =
+    observationsPage.totalElements > observationsPage.content.length;
 
   const fullName = composeFullName(patient.name);
 
@@ -118,6 +136,14 @@ export default async function PatientDetailPage({
           encounters={encounters.content}
           canRecord={!patient.voided}
         />
+
+        {patient.voided ? null : (
+          <TimelineSection
+            observations={observationsPage.content}
+            encountersById={encountersById}
+            truncated={observationsTruncated}
+          />
+        )}
       </div>
     </div>
   );
