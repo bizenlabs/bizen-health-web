@@ -4,7 +4,8 @@ import { requireSession } from "@/lib/auth";
 import { getEncounter } from "@/lib/encounters";
 import { getPatient } from "@/lib/patients";
 import { ApiError } from "@/lib/api";
-import { restoreEncounterAction, voidEncounterAction } from "../actions";
+import { restoreEncounterAction } from "../actions";
+import { VoidEncounterForm } from "../_components/void-encounter-form";
 
 export default async function EncounterDetailPage({
   params,
@@ -28,11 +29,6 @@ export default async function EncounterDetailPage({
       .join(" ") || "(unnamed)";
 
   const restore = restoreEncounterAction.bind(null, encounter.id);
-  const voidAction = voidEncounterAction.bind(
-    null,
-    encounter.id,
-    encounter.patientId,
-  );
 
   return (
     <div className="px-6 py-10">
@@ -99,41 +95,10 @@ export default async function EncounterDetailPage({
       </dl>
 
       {encounter.voided ? null : (
-        <form
-          action={voidAction}
-          onSubmit={(e) => {
-            if (
-              !confirm(
-                "Void this encounter? It will be hidden from the timeline.",
-              )
-            ) {
-              e.preventDefault();
-            }
-          }}
-          className="mt-10 max-w-2xl rounded-md border border-red-200 p-4 dark:border-red-900/40"
-        >
-          <h2 className="text-sm font-semibold tracking-wide text-red-700 uppercase dark:text-red-300">
-            Void encounter
-          </h2>
-          <label htmlFor="reason" className="mt-3 block text-xs text-zinc-500">
-            Reason (optional)
-          </label>
-          <input
-            id="reason"
-            name="reason"
-            type="text"
-            placeholder="e.g. duplicate"
-            className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-          />
-          <div className="mt-3 flex justify-end">
-            <button
-              type="submit"
-              className="rounded-md border border-red-300 bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-            >
-              Void
-            </button>
-          </div>
-        </form>
+        <VoidEncounterForm
+          encounterId={encounter.id}
+          patientId={encounter.patientId}
+        />
       )}
     </div>
   );
