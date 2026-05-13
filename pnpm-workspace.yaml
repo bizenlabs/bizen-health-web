@@ -1,3 +1,5 @@
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+patchedDependencies:
+  "@workos-inc/node@9.2.0": patches/@workos-inc__node@9.2.0.patch
