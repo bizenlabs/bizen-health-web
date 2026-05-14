@@ -19,6 +19,7 @@ import { Text } from "@/components/catalyst/text";
 import type { IdentifierType } from "@/lib/patients";
 import { registerPatientAction } from "../actions";
 import { DatePicker } from "./date-picker";
+import { PhotoInput } from "./photo-input";
 
 type FormState = {
   error: string | null;
@@ -65,7 +66,11 @@ export function RegisterPatientForm({
   }, [estimatedAge]);
 
   return (
-    <form action={formAction} className="mt-8 max-w-3xl">
+    <form
+      action={formAction}
+      encType="multipart/form-data"
+      className="mt-8 max-w-3xl"
+    >
       {state.error ? (
         <div
           role="alert"
@@ -121,10 +126,12 @@ export function RegisterPatientForm({
               />
               {state.fieldErrors.familyName ? (
                 <ErrorMessage>{state.fieldErrors.familyName}</ErrorMessage>
-              ) : (
-                <Description>Often missing in rural settings.</Description>
-              )}
+              ) : null}
             </Field>
+          </div>
+
+          <div className="sm:col-span-6">
+            <PhotoInput />
           </div>
 
           <div className="sm:col-span-3">
