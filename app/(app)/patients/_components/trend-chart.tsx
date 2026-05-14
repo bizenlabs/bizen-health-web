@@ -3,9 +3,13 @@ type Point = { value: number; observedAt: string };
 export function TrendChart({
   points,
   units,
+  lowNormal = null,
+  highNormal = null,
 }: {
   points: Point[];
   units: string | null;
+  lowNormal?: number | null;
+  highNormal?: number | null;
 }) {
   if (points.length === 0) {
     return (
@@ -25,8 +29,12 @@ export function TrendChart({
   const plotH = h - padTop - padBottom;
 
   const values = points.map((p) => p.value);
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  // Expand the y-domain to include the reference band so a fully-normal
+  // series still shows the band context instead of just a flat line.
+  const minV = Math.min(dataMin, lowNormal ?? dataMin);
+  const maxV = Math.max(dataMax, highNormal ?? dataMax);
   const rangeV = maxV - minV || 1;
   // pad so dots don't touch top/bottom
   const yMin = minV - rangeV * 0.08;
@@ -53,6 +61,13 @@ export function TrendChart({
   const xTickCount = Math.min(points.length, 5);
   const xTicks = makeXTicks(minT, maxT, xTickCount);
 
+  const bandTop = highNormal !== null ? yOf(highNormal) : null;
+  const bandBottom = lowNormal !== null ? yOf(lowNormal) : null;
+
+  const isOutOfRange = (v: number) =>
+    (lowNormal !== null && v < lowNormal) ||
+    (highNormal !== null && v > highNormal);
+
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
@@ -60,6 +75,17 @@ export function TrendChart({
       className="overflow-visible text-zinc-700 dark:text-zinc-300"
       aria-label="Trend chart"
     >
+      {/* Reference range band */}
+      {bandTop !== null || bandBottom !== null ? (
+        <rect
+          x={padLeft}
+          y={bandTop ?? padTop}
+          width={plotW}
+          height={(bandBottom ?? padTop + plotH) - (bandTop ?? padTop)}
+          className="fill-emerald-100/60 dark:fill-emerald-900/20"
+        />
+      ) : null}
+
       {/* Y-axis gridlines + labels */}
       {yTicks.map((v) => {
         const y = yOf(v);
@@ -134,14 +160,19 @@ export function TrendChart({
       {points.map((p, i) => {
         const cx = xOf(new Date(p.observedAt).getTime());
         const cy = yOf(p.value);
-        const titleText = `${formatTick(p.value)}${units ? " " + units : ""} · ${new Date(p.observedAt).toLocaleString()}`;
+        const out = isOutOfRange(p.value);
+        const titleText = `${formatTick(p.value)}${units ? " " + units : ""} · ${new Date(p.observedAt).toLocaleString()}${out ? " · out of range" : ""}`;
         return (
           <circle
             key={`dot-${i}`}
             cx={cx}
             cy={cy}
             r="3.5"
-            className="fill-emerald-500 stroke-white dark:stroke-zinc-950"
+            className={
+              out
+                ? "fill-red-500 stroke-white dark:stroke-zinc-950"
+                : "fill-emerald-500 stroke-white dark:stroke-zinc-950"
+            }
             strokeWidth="1.5"
           >
             <title>{titleText}</title>

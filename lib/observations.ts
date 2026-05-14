@@ -9,6 +9,8 @@ export type Concept = {
   description: string | null;
   dataType: ConceptDataType;
   units: string | null;
+  lowNormal: string | null;
+  highNormal: string | null;
 };
 
 export type Observation = {

@@ -66,6 +66,17 @@ export default async function TrendDetailPage({
   const min = values.length > 0 ? Math.min(...values) : null;
   const max = values.length > 0 ? Math.max(...values) : null;
 
+  // BigDecimal lands as a string on the wire; parse here and pass numbers to
+  // the chart so band math doesn't have to deal with two representations.
+  const lowNormal =
+    concept.lowNormal !== null ? Number(concept.lowNormal) : null;
+  const highNormal =
+    concept.highNormal !== null ? Number(concept.highNormal) : null;
+  const rangeLabel =
+    lowNormal !== null || highNormal !== null
+      ? `Normal: ${lowNormal ?? "—"}–${highNormal ?? "—"}${concept.units ? " " + concept.units : ""}`
+      : null;
+
   return (
     <div className="px-6 py-10">
       <Link
@@ -82,6 +93,9 @@ export default async function TrendDetailPage({
           </span>
         ) : null}
       </h1>
+      {rangeLabel ? (
+        <p className="mt-1 text-xs text-zinc-500">{rangeLabel}</p>
+      ) : null}
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Latest" value={formatStat(latest)} units={concept.units} />
@@ -91,7 +105,12 @@ export default async function TrendDetailPage({
       </div>
 
       <div className="mt-8 rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-        <TrendChart points={points} units={concept.units} />
+        <TrendChart
+          points={points}
+          units={concept.units}
+          lowNormal={lowNormal}
+          highNormal={highNormal}
+        />
       </div>
 
       <section className="mt-8">
