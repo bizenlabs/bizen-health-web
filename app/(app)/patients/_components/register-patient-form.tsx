@@ -212,10 +212,7 @@ export function RegisterPatientForm({
               <div className="sm:col-span-3">
                 <Field>
                   <Label>Identifier type</Label>
-                  <Description>
-                    Optional. Add one now (e.g. Aadhaar, MRN); more can be added
-                    later.
-                  </Description>
+                  <Description>Optional.</Description>
                   <Select name="identifierTypeId" defaultValue="">
                     <option value="">— None —</option>
                     {identifierTypes.map((t) => (
