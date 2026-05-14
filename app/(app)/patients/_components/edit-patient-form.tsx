@@ -2,7 +2,19 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import Link from "next/link";
+import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import { Badge } from "@/components/catalyst/badge";
+import { Button } from "@/components/catalyst/button";
+import { CheckboxField, Checkbox } from "@/components/catalyst/checkbox";
+import {
+  Description,
+  ErrorMessage,
+  Field,
+  Label,
+} from "@/components/catalyst/fieldset";
+import { Input } from "@/components/catalyst/input";
+import { Select } from "@/components/catalyst/select";
 import type { PatientDetail } from "@/lib/patients";
 import { updatePatientAction } from "../actions";
 
@@ -16,19 +28,6 @@ const GENDERS = [
   { value: "OTHER", label: "Other" },
   { value: "UNKNOWN", label: "Unknown" },
 ];
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-    >
-      {pending ? "Saving…" : "Save changes"}
-    </button>
-  );
-}
 
 export function EditPatientForm({ patient }: { patient: PatientDetail }) {
   const action = updatePatientAction.bind(null, patient.id);
@@ -44,93 +43,112 @@ export function EditPatientForm({ patient }: { patient: PatientDetail }) {
     : null;
 
   return (
-    <form action={formAction} className="mt-6 max-w-2xl space-y-6">
-      <section>
-        <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-          Name
-        </h2>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Field
-            label="Given name"
-            name="givenName"
-            defaultValue={patient.name.givenName ?? ""}
-            error={state.fieldErrors.givenName}
+    <form action={formAction} className="mt-8 max-w-3xl">
+      {state.error ? (
+        <div
+          role="alert"
+          className="mb-6 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+        >
+          <ExclamationTriangleIcon
+            className="mt-0.5 size-5 shrink-0 text-red-600 dark:text-red-400"
+            aria-hidden="true"
           />
-          <Field
-            label="Middle name"
-            name="middleName"
-            defaultValue={patient.name.middleName ?? ""}
-          />
-          <Field
-            label="Family name"
-            name="familyName"
-            defaultValue={patient.name.familyName ?? ""}
-            error={state.fieldErrors.familyName}
-          />
+          <p>{state.error}</p>
         </div>
-      </section>
+      ) : null}
 
-      <section>
-        <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-          Demographics
-        </h2>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <label htmlFor="gender" className="block text-xs text-zinc-500">
-              Gender
-            </label>
-            <select
-              id="gender"
-              name="gender"
-              defaultValue={patient.demographics.gender ?? ""}
-              className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-            >
-              {GENDERS.map((g) => (
-                <option key={g.value} value={g.value}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
+      <div className="space-y-12">
+        <FormSection
+          title="Name"
+          description="At least one of given or family name."
+        >
+          <div className="sm:col-span-2">
+            <Field>
+              <Label>Given name</Label>
+              <Input
+                name="givenName"
+                defaultValue={patient.name.givenName ?? ""}
+                autoComplete="off"
+                invalid={!!state.fieldErrors.givenName}
+              />
+              {state.fieldErrors.givenName ? (
+                <ErrorMessage>{state.fieldErrors.givenName}</ErrorMessage>
+              ) : null}
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field>
+              <Label>Middle name</Label>
+              <Input
+                name="middleName"
+                defaultValue={patient.name.middleName ?? ""}
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field>
+              <Label>Family name</Label>
+              <Input
+                name="familyName"
+                defaultValue={patient.name.familyName ?? ""}
+                autoComplete="off"
+                invalid={!!state.fieldErrors.familyName}
+              />
+              {state.fieldErrors.familyName ? (
+                <ErrorMessage>{state.fieldErrors.familyName}</ErrorMessage>
+              ) : null}
+            </Field>
+          </div>
+        </FormSection>
+
+        <FormSection title="Demographics">
+          <div className="sm:col-span-3">
+            <Field>
+              <Label>Gender</Label>
+              <Select
+                name="gender"
+                defaultValue={patient.demographics.gender ?? ""}
+              >
+                {GENDERS.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </div>
 
-          <div>
-            <label className="flex items-center gap-2 text-xs text-zinc-500">
-              <input
-                type="checkbox"
+          <div className="sm:col-span-3">
+            <CheckboxField>
+              <Checkbox
                 name="useEstimatedAge"
                 checked={useEstimatedAge}
-                onChange={(e) => setUseEstimatedAge(e.target.checked)}
+                onChange={setUseEstimatedAge}
               />
-              Don&apos;t know exact DOB — enter age
-            </label>
+              <Label>Don&apos;t know exact DOB — enter age</Label>
+              <Description>
+                Use when only the approximate age is known. Stored as estimated
+                and can be refined later.
+              </Description>
+            </CheckboxField>
+
             {useEstimatedAge ? (
-              <div className="mt-2">
-                <label
-                  htmlFor="estimatedAge"
-                  className="block text-xs text-zinc-500"
-                >
-                  Approximate age (years)
-                </label>
-                <input
-                  id="estimatedAge"
+              <Field className="mt-4">
+                <Label>Approximate age (years)</Label>
+                <Input
                   name="estimatedAge"
                   type="number"
+                  inputMode="numeric"
                   min={0}
                   max={130}
                   defaultValue={initialAgeYears ?? ""}
-                  className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
                 />
-              </div>
+              </Field>
             ) : (
-              <div className="mt-2">
-                <label
-                  htmlFor="birthdate"
-                  className="block text-xs text-zinc-500"
-                >
-                  Date of birth
-                </label>
-                <input
-                  id="birthdate"
+              <Field className="mt-4">
+                <Label>Date of birth</Label>
+                <Input
                   name="birthdate"
                   type="date"
                   defaultValue={
@@ -139,114 +157,191 @@ export function EditPatientForm({ patient }: { patient: PatientDetail }) {
                       ? patient.demographics.birthdate
                       : ""
                   }
-                  className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
                 />
-              </div>
+              </Field>
             )}
           </div>
-        </div>
-      </section>
+        </FormSection>
 
-      <AddressSection address={patient.address} />
+        <AddressSection address={patient.address} last />
+      </div>
 
-      {state.error ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
-      ) : null}
-
-      <div className="flex justify-end gap-3">
-        <Link
-          href={`/patients/${patient.id}`}
-          className="rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-        >
+      <div className="mt-6 flex items-center justify-end gap-x-6">
+        <Button href={`/patients/${patient.id}`} plain>
           Cancel
-        </Link>
-        <SubmitButton />
+        </Button>
+        <SaveButton />
       </div>
     </form>
   );
 }
 
-function Field({
-  label,
-  name,
-  defaultValue,
-  error,
+function SaveButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "Saving…" : "Save changes"}
+    </Button>
+  );
+}
+
+function FormSection({
+  title,
+  description,
+  tone,
+  last = false,
+  children,
 }: {
-  label: string;
-  name: string;
-  defaultValue?: string;
-  error?: string;
+  title: string;
+  description?: string;
+  tone?: "required" | "optional";
+  last?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div>
-      <label htmlFor={name} className="block text-xs text-zinc-500">
-        {label}
-      </label>
-      <input
-        id={name}
-        name={name}
-        type="text"
-        defaultValue={defaultValue}
-        className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-      />
-      {error ? (
-        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+    <div
+      className={
+        last
+          ? undefined
+          : "border-b border-zinc-950/10 pb-12 dark:border-white/10"
+      }
+    >
+      <div className="flex items-center gap-2">
+        <h2 className="text-base/7 font-semibold text-zinc-950 dark:text-white">
+          {title}
+        </h2>
+        {tone === "required" ? <Badge color="amber">Required</Badge> : null}
+        {tone === "optional" ? <Badge color="zinc">Optional</Badge> : null}
+      </div>
+      {description ? (
+        <p className="mt-1 text-sm/6 text-zinc-600 dark:text-zinc-400">
+          {description}
+        </p>
+      ) : null}
+      <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AddressSection({
+  address,
+  last = false,
+}: {
+  address: PatientDetail["address"];
+  last?: boolean;
+}) {
+  const hasAny = Object.values(address).some(Boolean);
+  const [open, setOpen] = useState(hasAny);
+
+  return (
+    <div
+      className={
+        last
+          ? undefined
+          : "border-b border-zinc-950/10 pb-12 dark:border-white/10"
+      }
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="group flex w-full items-center justify-between text-left"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-2">
+          <h2 className="text-base/7 font-semibold text-zinc-950 dark:text-white">
+            Address
+          </h2>
+          <Badge color="zinc">Optional</Badge>
+        </span>
+        <span className="flex items-center gap-2 text-xs text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300">
+          {!open && !hasAny ? "Not provided" : null}
+          <ChevronDownIcon
+            className={
+              open
+                ? "size-4 rotate-180 transition-transform"
+                : "size-4 transition-transform"
+            }
+          />
+        </span>
+      </button>
+
+      {open ? (
+        <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
+          {ADDRESS_FIELDS.map((f) => (
+            <div key={f.name} className={f.colSpan}>
+              <Field>
+                <Label>{f.label}</Label>
+                <Input
+                  name={f.name}
+                  autoComplete={f.autoComplete}
+                  defaultValue={address[f.name] ?? ""}
+                />
+              </Field>
+            </div>
+          ))}
+        </div>
       ) : null}
     </div>
   );
 }
 
-function AddressSection({ address }: { address: PatientDetail["address"] }) {
-  const hasAny = Object.values(address).some((v) => v);
-  const [open, setOpen] = useState(hasAny);
-  return (
-    <section>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="text-sm font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-700 dark:hover:text-zinc-300"
-      >
-        {open ? "− Address" : "+ Address (optional)"}
-      </button>
-      {open ? (
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field
-            label="Line 1"
-            name="address1"
-            defaultValue={address.address1 ?? ""}
-          />
-          <Field
-            label="Line 2"
-            name="address2"
-            defaultValue={address.address2 ?? ""}
-          />
-          <Field
-            label="City / village"
-            name="cityVillage"
-            defaultValue={address.cityVillage ?? ""}
-          />
-          <Field
-            label="District"
-            name="countyDistrict"
-            defaultValue={address.countyDistrict ?? ""}
-          />
-          <Field
-            label="State / province"
-            name="stateProvince"
-            defaultValue={address.stateProvince ?? ""}
-          />
-          <Field
-            label="Country"
-            name="country"
-            defaultValue={address.country ?? ""}
-          />
-          <Field
-            label="Postal code"
-            name="postalCode"
-            defaultValue={address.postalCode ?? ""}
-          />
-        </div>
-      ) : null}
-    </section>
-  );
-}
+type AddressKey =
+  | "address1"
+  | "address2"
+  | "cityVillage"
+  | "countyDistrict"
+  | "stateProvince"
+  | "country"
+  | "postalCode";
+
+const ADDRESS_FIELDS: {
+  name: AddressKey;
+  label: string;
+  autoComplete: string;
+  colSpan: string;
+}[] = [
+  {
+    name: "address1",
+    label: "Line 1",
+    autoComplete: "address-line1",
+    colSpan: "sm:col-span-6",
+  },
+  {
+    name: "address2",
+    label: "Line 2",
+    autoComplete: "address-line2",
+    colSpan: "sm:col-span-6",
+  },
+  {
+    name: "cityVillage",
+    label: "City / village",
+    autoComplete: "address-level2",
+    colSpan: "sm:col-span-3",
+  },
+  {
+    name: "countyDistrict",
+    label: "District",
+    autoComplete: "address-level3",
+    colSpan: "sm:col-span-3",
+  },
+  {
+    name: "stateProvince",
+    label: "State / province",
+    autoComplete: "address-level1",
+    colSpan: "sm:col-span-2",
+  },
+  {
+    name: "country",
+    label: "Country",
+    autoComplete: "country-name",
+    colSpan: "sm:col-span-2",
+  },
+  {
+    name: "postalCode",
+    label: "Postal code",
+    autoComplete: "postal-code",
+    colSpan: "sm:col-span-2",
+  },
+];

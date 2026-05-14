@@ -1,222 +1,342 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useActionState, useMemo, useState } from "react";
+import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import { Badge } from "@/components/catalyst/badge";
+import { Button } from "@/components/catalyst/button";
+import {
+  Description,
+  ErrorMessage,
+  Field,
+  Fieldset,
+  Label,
+  Legend,
+} from "@/components/catalyst/fieldset";
+import { Input } from "@/components/catalyst/input";
+import { Radio, RadioField, RadioGroup } from "@/components/catalyst/radio";
+import { Select } from "@/components/catalyst/select";
+import { Text } from "@/components/catalyst/text";
 import type { IdentifierType } from "@/lib/patients";
 import { registerPatientAction } from "../actions";
 
-type RegisterPatientFormState = {
+type FormState = {
   error: string | null;
   fieldErrors: Record<string, string>;
 };
 
-const INITIAL_STATE: RegisterPatientFormState = {
-  error: null,
-  fieldErrors: {},
-};
+const INITIAL_STATE: FormState = { error: null, fieldErrors: {} };
 
 const GENDERS: { value: string; label: string }[] = [
-  { value: "", label: "—" },
   { value: "FEMALE", label: "Female" },
   { value: "MALE", label: "Male" },
   { value: "OTHER", label: "Other" },
   { value: "UNKNOWN", label: "Unknown" },
 ];
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-    >
-      {pending ? "Registering…" : "Register patient"}
-    </button>
-  );
-}
+type AgeMode = "dob" | "estimated" | "unknown";
+
+const AGE_MODES: { value: AgeMode; label: string }[] = [
+  { value: "dob", label: "Exact DOB" },
+  { value: "estimated", label: "Approximate" },
+  { value: "unknown", label: "Unknown" },
+];
 
 export function RegisterPatientForm({
   identifierTypes,
 }: {
   identifierTypes: IdentifierType[];
 }) {
-  const [state, formAction] = useActionState(
+  const [state, formAction, isPending] = useActionState(
     registerPatientAction,
     INITIAL_STATE,
   );
-  const [useEstimatedAge, setUseEstimatedAge] = useState(false);
+  const [ageMode, setAgeMode] = useState<AgeMode>("dob");
+  const [birthdate, setBirthdate] = useState("");
+  const [estimatedAge, setEstimatedAge] = useState("");
+
+  // Live feedback so receptionists catch typos before submit.
+  const ageFromDob = useMemo(() => computeAge(birthdate), [birthdate]);
+  const yearFromEstimate = useMemo(() => {
+    const n = Number(estimatedAge);
+    if (!Number.isFinite(n) || n < 0 || n > 130) return null;
+    return new Date().getFullYear() - Math.floor(n);
+  }, [estimatedAge]);
 
   return (
-    <form action={formAction} className="mt-6 max-w-2xl space-y-6">
-      <section>
-        <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-          Name
-        </h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          At least one of given or family name is required. Names are stored
-          exactly as entered — no normalisation.
-        </p>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Field
-            label="Given name"
-            name="givenName"
-            error={state.fieldErrors.givenName}
-          />
-          <Field label="Middle name" name="middleName" />
-          <Field
-            label="Family name"
-            name="familyName"
-            error={state.fieldErrors.familyName}
-          />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-          Demographics
-        </h2>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <label htmlFor="gender" className="block text-xs text-zinc-500">
-              Gender
-            </label>
-            <select
-              id="gender"
-              name="gender"
-              defaultValue=""
-              className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-            >
-              {GENDERS.map((g) => (
-                <option key={g.value} value={g.value}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="flex items-center gap-2 text-xs text-zinc-500">
-              <input
-                type="checkbox"
-                name="useEstimatedAge"
-                checked={useEstimatedAge}
-                onChange={(e) => setUseEstimatedAge(e.target.checked)}
-              />
-              Don&apos;t know exact DOB — enter age
-            </label>
-            {useEstimatedAge ? (
-              <div className="mt-2">
-                <label
-                  htmlFor="estimatedAge"
-                  className="block text-xs text-zinc-500"
-                >
-                  Approximate age (years)
-                </label>
-                <input
-                  id="estimatedAge"
-                  name="estimatedAge"
-                  type="number"
-                  min={0}
-                  max={130}
-                  className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-                />
-              </div>
-            ) : (
-              <div className="mt-2">
-                <label
-                  htmlFor="birthdate"
-                  className="block text-xs text-zinc-500"
-                >
-                  Date of birth
-                </label>
-                <input
-                  id="birthdate"
-                  name="birthdate"
-                  type="date"
-                  className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <AddressSection />
-
-      {identifierTypes.length > 0 ? (
-        <section>
-          <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-            Identifier (optional)
-          </h2>
-          <p className="mt-1 text-xs text-zinc-500">
-            Add a single identifier now; more can be added from the patient
-            detail page later.
-          </p>
-          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div>
-              <label
-                htmlFor="identifierTypeId"
-                className="block text-xs text-zinc-500"
-              >
-                Type
-              </label>
-              <select
-                id="identifierTypeId"
-                name="identifierTypeId"
-                defaultValue=""
-                className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-              >
-                <option value="">— None —</option>
-                {identifierTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Field label="Value" name="identifierValue" />
-          </div>
-        </section>
-      ) : null}
-
+    <form action={formAction} className="mt-8 max-w-3xl">
       {state.error ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
+        <div
+          role="alert"
+          className="mb-6 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+        >
+          <ExclamationTriangleIcon
+            className="mt-0.5 size-5 shrink-0 text-red-600 dark:text-red-400"
+            aria-hidden="true"
+          />
+          <div>
+            <p className="font-semibold">Couldn’t register patient</p>
+            <p className="mt-0.5 text-red-800/90 dark:text-red-200/90">
+              {state.error}
+            </p>
+          </div>
+        </div>
       ) : null}
 
-      <div className="flex justify-end">
-        <SubmitButton />
+      <div className="space-y-12">
+        {/* — Name — */}
+        <FormSection
+          title="Name"
+          description="At least one of given or family name. Stored exactly as entered — no normalisation."
+          tone="required"
+        >
+          <div className="sm:col-span-2">
+            <Field>
+              <Label>Given name</Label>
+              <Input
+                name="givenName"
+                autoFocus
+                autoComplete="off"
+                invalid={!!state.fieldErrors.givenName}
+              />
+              {state.fieldErrors.givenName ? (
+                <ErrorMessage>{state.fieldErrors.givenName}</ErrorMessage>
+              ) : null}
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field>
+              <Label>Middle name</Label>
+              <Input name="middleName" autoComplete="off" />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field>
+              <Label>Family name</Label>
+              <Input
+                name="familyName"
+                autoComplete="off"
+                invalid={!!state.fieldErrors.familyName}
+              />
+              {state.fieldErrors.familyName ? (
+                <ErrorMessage>{state.fieldErrors.familyName}</ErrorMessage>
+              ) : (
+                <Description>Often missing in rural settings.</Description>
+              )}
+            </Field>
+          </div>
+        </FormSection>
+
+        {/* — Demographics — */}
+        <FormSection title="Demographics">
+          <div className="sm:col-span-3">
+            <Fieldset>
+              <Legend className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                Gender
+              </Legend>
+              <RadioGroup
+                name="gender"
+                defaultValue=""
+                className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3"
+              >
+                {GENDERS.map((g) => (
+                  <RadioField key={g.value}>
+                    <Radio value={g.value} />
+                    <Label>{g.label}</Label>
+                  </RadioField>
+                ))}
+              </RadioGroup>
+            </Fieldset>
+          </div>
+
+          <div className="sm:col-span-3">
+            <Fieldset>
+              <Legend className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+                Age
+              </Legend>
+              <SegmentedToggle
+                value={ageMode}
+                onChange={setAgeMode}
+                options={AGE_MODES}
+              />
+
+              {ageMode === "dob" ? (
+                <Field className="mt-4">
+                  <Label className="sr-only">Date of birth</Label>
+                  <Input
+                    type="date"
+                    name="birthdate"
+                    value={birthdate}
+                    onChange={(e) => setBirthdate(e.target.value)}
+                    max={new Date().toISOString().slice(0, 10)}
+                  />
+                  {ageFromDob !== null ? (
+                    <Description>
+                      ≈ {ageFromDob} {ageFromDob === 1 ? "year" : "years"} old
+                    </Description>
+                  ) : null}
+                </Field>
+              ) : null}
+
+              {ageMode === "estimated" ? (
+                <Field className="mt-4">
+                  <Label className="sr-only">Approximate age</Label>
+                  <input type="hidden" name="useEstimatedAge" value="on" />
+                  <Input
+                    type="number"
+                    name="estimatedAge"
+                    inputMode="numeric"
+                    min={0}
+                    max={130}
+                    placeholder="years"
+                    value={estimatedAge}
+                    onChange={(e) => setEstimatedAge(e.target.value)}
+                    invalid={!!state.fieldErrors.estimatedAge}
+                  />
+                  {state.fieldErrors.estimatedAge ? (
+                    <ErrorMessage>
+                      {state.fieldErrors.estimatedAge}
+                    </ErrorMessage>
+                  ) : yearFromEstimate !== null ? (
+                    <Description>
+                      Recorded as born around January {yearFromEstimate}.
+                    </Description>
+                  ) : (
+                    <Description>
+                      Stored as estimated; can be refined later.
+                    </Description>
+                  )}
+                </Field>
+              ) : null}
+
+              {ageMode === "unknown" ? (
+                <Text className="mt-4">
+                  No age recorded. Add later when known.
+                </Text>
+              ) : null}
+            </Fieldset>
+          </div>
+        </FormSection>
+
+        {/* — Address — */}
+        <AddressSection />
+
+        {/* — Identifier — */}
+        {identifierTypes.length > 0 ? (
+          <FormSection
+            title="Identifier"
+            description="Add one now (e.g. Aadhaar, MRN). More can be added later."
+            tone="optional"
+            last
+          >
+            <div className="sm:col-span-3">
+              <Field>
+                <Label>Type</Label>
+                <Select name="identifierTypeId" defaultValue="">
+                  <option value="">— None —</option>
+                  {identifierTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <div className="sm:col-span-3">
+              <Field>
+                <Label>Value</Label>
+                <Input name="identifierValue" autoComplete="off" />
+              </Field>
+            </div>
+          </FormSection>
+        ) : null}
+      </div>
+
+      <div className="mt-6 flex items-center justify-end gap-x-6">
+        <Button href="/patients" plain>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Registering…" : "Register patient"}
+        </Button>
       </div>
     </form>
   );
 }
 
-function Field({
-  label,
-  name,
-  defaultValue,
-  error,
+function FormSection({
+  title,
+  description,
+  tone,
+  last = false,
+  children,
 }: {
-  label: string;
-  name: string;
-  defaultValue?: string;
-  error?: string;
+  title: string;
+  description?: string;
+  tone?: "required" | "optional";
+  last?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div>
-      <label htmlFor={name} className="block text-xs text-zinc-500">
-        {label}
-      </label>
-      <input
-        id={name}
-        name={name}
-        type="text"
-        defaultValue={defaultValue}
-        className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
-      />
-      {error ? (
-        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+    <div
+      className={
+        last
+          ? undefined
+          : "border-b border-zinc-950/10 pb-12 dark:border-white/10"
+      }
+    >
+      <div className="flex items-center gap-2">
+        <h2 className="text-base/7 font-semibold text-zinc-950 dark:text-white">
+          {title}
+        </h2>
+        {tone === "required" ? <Badge color="amber">Required</Badge> : null}
+        {tone === "optional" ? <Badge color="zinc">Optional</Badge> : null}
+      </div>
+      {description ? (
+        <p className="mt-1 text-sm/6 text-zinc-600 dark:text-zinc-400">
+          {description}
+        </p>
       ) : null}
+      <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SegmentedToggle<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: readonly { value: T; label: string }[];
+}) {
+  return (
+    <div
+      role="radiogroup"
+      className="mt-3 inline-flex rounded-lg border border-zinc-950/10 bg-zinc-50 p-1 text-sm dark:border-white/10 dark:bg-zinc-900/60"
+    >
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            className={
+              active
+                ? "rounded-md bg-white px-3 py-1.5 font-medium text-zinc-950 shadow-sm dark:bg-zinc-700 dark:text-white"
+                : "rounded-md px-3 py-1.5 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            }
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -224,68 +344,126 @@ function Field({
 function AddressSection({
   defaultValues,
 }: {
-  defaultValues?: {
-    address1?: string | null;
-    address2?: string | null;
-    cityVillage?: string | null;
-    countyDistrict?: string | null;
-    stateProvince?: string | null;
-    country?: string | null;
-    postalCode?: string | null;
-  };
+  defaultValues?: Partial<Record<AddressKey, string | null>>;
 }) {
   const hasAny = defaultValues
-    ? Object.values(defaultValues).some((v) => v)
+    ? Object.values(defaultValues).some(Boolean)
     : false;
   const [open, setOpen] = useState(hasAny);
+
   return (
-    <section>
+    <div className="border-b border-zinc-950/10 pb-12 dark:border-white/10">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="text-sm font-semibold tracking-wide text-zinc-500 uppercase hover:text-zinc-700 dark:hover:text-zinc-300"
+        className="group flex w-full items-center justify-between text-left"
+        aria-expanded={open}
       >
-        {open ? "− Address" : "+ Address (optional)"}
+        <span className="flex items-center gap-2">
+          <h2 className="text-base/7 font-semibold text-zinc-950 dark:text-white">
+            Address
+          </h2>
+          <Badge color="zinc">Optional</Badge>
+        </span>
+        <span className="flex items-center gap-2 text-xs text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300">
+          {!open && !hasAny ? "Not provided" : null}
+          <ChevronDownIcon
+            className={
+              open
+                ? "size-4 rotate-180 transition-transform"
+                : "size-4 transition-transform"
+            }
+          />
+        </span>
       </button>
+
       {open ? (
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field
-            label="Line 1"
-            name="address1"
-            defaultValue={defaultValues?.address1 ?? ""}
-          />
-          <Field
-            label="Line 2"
-            name="address2"
-            defaultValue={defaultValues?.address2 ?? ""}
-          />
-          <Field
-            label="City / village"
-            name="cityVillage"
-            defaultValue={defaultValues?.cityVillage ?? ""}
-          />
-          <Field
-            label="District"
-            name="countyDistrict"
-            defaultValue={defaultValues?.countyDistrict ?? ""}
-          />
-          <Field
-            label="State / province"
-            name="stateProvince"
-            defaultValue={defaultValues?.stateProvince ?? ""}
-          />
-          <Field
-            label="Country"
-            name="country"
-            defaultValue={defaultValues?.country ?? ""}
-          />
-          <Field
-            label="Postal code"
-            name="postalCode"
-            defaultValue={defaultValues?.postalCode ?? ""}
-          />
+        <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-6">
+          {ADDRESS_FIELDS.map((f) => (
+            <div key={f.name} className={f.colSpan}>
+              <Field>
+                <Label>{f.label}</Label>
+                <Input
+                  name={f.name}
+                  autoComplete={f.autoComplete}
+                  defaultValue={defaultValues?.[f.name] ?? ""}
+                />
+              </Field>
+            </div>
+          ))}
         </div>
       ) : null}
-    </section>
+    </div>
   );
+}
+
+type AddressKey =
+  | "address1"
+  | "address2"
+  | "cityVillage"
+  | "countyDistrict"
+  | "stateProvince"
+  | "country"
+  | "postalCode";
+
+const ADDRESS_FIELDS: {
+  name: AddressKey;
+  label: string;
+  autoComplete: string;
+  colSpan: string;
+}[] = [
+  {
+    name: "address1",
+    label: "Line 1",
+    autoComplete: "address-line1",
+    colSpan: "sm:col-span-6",
+  },
+  {
+    name: "address2",
+    label: "Line 2",
+    autoComplete: "address-line2",
+    colSpan: "sm:col-span-6",
+  },
+  {
+    name: "cityVillage",
+    label: "City / village",
+    autoComplete: "address-level2",
+    colSpan: "sm:col-span-3",
+  },
+  {
+    name: "countyDistrict",
+    label: "District",
+    autoComplete: "address-level3",
+    colSpan: "sm:col-span-3",
+  },
+  {
+    name: "stateProvince",
+    label: "State / province",
+    autoComplete: "address-level1",
+    colSpan: "sm:col-span-2",
+  },
+  {
+    name: "country",
+    label: "Country",
+    autoComplete: "country-name",
+    colSpan: "sm:col-span-2",
+  },
+  {
+    name: "postalCode",
+    label: "Postal code",
+    autoComplete: "postal-code",
+    colSpan: "sm:col-span-2",
+  },
+];
+
+function computeAge(isoDate: string): number | null {
+  if (!isoDate) return null;
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  if (age < 0 || age > 130) return null;
+  return age;
 }
