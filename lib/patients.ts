@@ -1,5 +1,5 @@
 import "server-only";
-import { api } from "@/lib/api";
+import { api, apiMultipart } from "@/lib/api";
 
 export type Gender = "MALE" | "FEMALE" | "OTHER" | "UNKNOWN";
 export type AllergyStatus = "UNKNOWN" | "NO_KNOWN_ALLERGIES" | "SEE_LIST";
@@ -207,3 +207,16 @@ export const restorePatient = (patientId: string) =>
 
 export const getIdentifierTypes = () =>
   api<IdentifierType[]>(`/v1/patient-identifier-types`);
+
+/**
+ * Uploads (or replaces) a patient's profile photo. The blob should already be
+ * resized + compressed client-side — core caps at 1MB and validates JPEG/PNG
+ * magic bytes.
+ */
+export const uploadPatientPhoto = (patientId: string, file: Blob) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return apiMultipart<void>(`/v1/patients/${patientId}/photo`, fd, {
+    method: "PUT",
+  });
+};

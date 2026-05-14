@@ -71,33 +71,19 @@ async function readProblem(res: Response): Promise<ProblemDetails | null> {
   }
 }
 
-// Server-only fetch wrapper for Spring Boot. Adds Authorization (Bearer JWT)
-// and X-Tenant-Id (mirrors the active org claim) on every call. The JWT is the
-// real authority — X-Tenant-Id is for trace clarity.
-//
-// Callers should let UnauthorizedError / ForbiddenError propagate so an
-// `error.tsx` boundary or a Server Action wrapper can convert them to redirects
-// (`/sign-in`, `/suspended`).
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function authHeaders(): Promise<Record<string, string>> {
   const token = await getApiToken();
   if (!token) throw new UnauthorizedError();
   const tenantId = (await headers()).get("x-tenant-id");
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(tenantId ? { "X-Tenant-Id": tenantId } : {}),
+  };
+}
 
-  const res = await fetch(`${env.SPRING_BASE_URL}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(tenantId ? { "X-Tenant-Id": tenantId } : {}),
-      ...(init.headers ?? {}),
-    },
-  });
-
+async function throwForStatus(res: Response): Promise<void> {
   if (res.status === 401) throw new UnauthorizedError();
-  if (res.status === 403) {
-    throw new ForbiddenError(await readProblem(res));
-  }
+  if (res.status === 403) throw new ForbiddenError(await readProblem(res));
   if (!res.ok) {
     const problem = await readProblem(res);
     throw new ApiError(
@@ -108,8 +94,75 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       problem ?? undefined,
     );
   }
+}
 
+// Server-only fetch wrapper for Spring Boot. Adds Authorization (Bearer JWT)
+// and X-Tenant-Id (mirrors the active org claim) on every call. The JWT is the
+// real authority — X-Tenant-Id is for trace clarity.
+//
+// Callers should let UnauthorizedError / ForbiddenError propagate so an
+// `error.tsx` boundary or a Server Action wrapper can convert them to redirects
+// (`/sign-in`, `/suspended`).
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const auth = await authHeaders();
+  const res = await fetch(`${env.SPRING_BASE_URL}${path}`, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...auth,
+      ...(init.headers ?? {}),
+    },
+  });
+  await throwForStatus(res);
   // Handle 204 No Content / empty bodies for callers that opt in via `T = void`.
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/**
+ * Multipart variant for file uploads. The browser/fetch sets the
+ * {@code Content-Type} (including the boundary) when the body is a {@code
+ * FormData} instance — so this helper deliberately omits the header that
+ * {@link api} hardcodes. Same auth + tenant headers; same error handling.
+ */
+export async function apiMultipart<T>(
+  path: string,
+  formData: FormData,
+  init: Omit<RequestInit, "body"> = {},
+): Promise<T> {
+  const auth = await authHeaders();
+  const res = await fetch(`${env.SPRING_BASE_URL}${path}`, {
+    ...init,
+    body: formData,
+    cache: "no-store",
+    headers: {
+      ...auth,
+      ...(init.headers ?? {}),
+    },
+  });
+  await throwForStatus(res);
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+/**
+ * Raw passthrough for byte streams (images, PDFs). Returns the {@link
+ * Response} unparsed so route handlers can pipe it to the browser. Adds auth
+ * + tenant headers; does NOT add Content-Type. Caller is responsible for
+ * status handling — 401/403/404 are returned as-is, not thrown.
+ */
+export async function apiRaw(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const auth = await authHeaders();
+  return fetch(`${env.SPRING_BASE_URL}${path}`, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      ...auth,
+      ...(init.headers ?? {}),
+    },
+  });
 }

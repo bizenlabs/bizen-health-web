@@ -5,6 +5,7 @@ import { getIdentifierTypes, getPatient } from "@/lib/patients";
 import { listEncountersForPatient } from "@/lib/encounters";
 import { listObservationsForPatient } from "@/lib/observations";
 import { ApiError } from "@/lib/api";
+import { PatientAvatar } from "@/components/patient-avatar";
 import { EncountersSection } from "../_components/encounters-section";
 import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
@@ -13,9 +14,12 @@ import { VitalsTrendSection } from "../_components/vitals-trend-section";
 
 export default async function PatientDetailPage({
   params,
+  searchParams,
 }: PageProps<"/patients/[id]">) {
   await requireSession();
   const { id } = await params;
+  const sp = await searchParams;
+  const photoFailed = sp.photo_failed === "1";
 
   let patient;
   try {
@@ -59,7 +63,14 @@ export default async function PatientDetailPage({
         ← All patients
       </Link>
       <div className="mt-2 flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">{fullName || "(unnamed)"}</h1>
+        <div className="flex items-center gap-4">
+          <PatientAvatar
+            patientId={patient.id}
+            name={fullName || "Patient"}
+            className="size-14"
+          />
+          <h1 className="text-2xl font-semibold">{fullName || "(unnamed)"}</h1>
+        </div>
         {patient.voided ? null : (
           <Link
             href={`/patients/${patient.id}/edit`}
@@ -69,6 +80,16 @@ export default async function PatientDetailPage({
           </Link>
         )}
       </div>
+
+      {photoFailed ? (
+        <div
+          role="status"
+          className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          Patient was created, but the photo couldn’t be uploaded. You can try
+          again later.
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <LifecycleActions patient={patient} />

@@ -10,6 +10,7 @@ import {
   restorePatient,
   setPreferredPatientIdentifier,
   updatePatient,
+  uploadPatientPhoto,
   voidPatient,
   voidPatientIdentifier,
   type Address,
@@ -127,8 +128,21 @@ export async function registerPatientAction(
     return { error: "Failed to register patient", fieldErrors: {} };
   }
 
+  // Photo is optional and best-effort. A failed upload must not roll back the
+  // patient — surface as a soft warning on the detail page via a query param.
+  let photoFailed = false;
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    try {
+      await uploadPatientPhoto(createdId, photo);
+    } catch (err) {
+      console.error("[patients] photo upload failed", err);
+      photoFailed = true;
+    }
+  }
+
   revalidatePath("/patients");
-  redirect(`/patients/${createdId}`);
+  redirect(`/patients/${createdId}${photoFailed ? "?photo_failed=1" : ""}`);
 }
 
 export async function updatePatientAction(
