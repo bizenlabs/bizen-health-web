@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { listMemberships } from "@/lib/workos";
-import { switchOrgAction } from "./actions";
+import { SelectOrgList } from "./SelectOrgList";
 
 function sanitize(returnTo: string | string[] | undefined): string {
   const v = Array.isArray(returnTo) ? returnTo[0] : returnTo;
@@ -40,25 +40,14 @@ export default async function SelectOrg({
         <p className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
           You belong to multiple organizations. Pick one to continue.
         </p>
-        <ul className="mt-8 space-y-2">
-          {active.map((m) => (
-            <li key={m.id}>
-              <form
-                action={switchOrgAction.bind(null, m.organizationId, returnTo)}
-              >
-                <button
-                  type="submit"
-                  className="flex w-full items-center justify-between rounded-md border border-zinc-200 px-4 py-3 text-left text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-                >
-                  <span className="font-medium">{m.organizationName}</span>
-                  <span className="text-xs text-zinc-500">
-                    {m.role?.slug ?? ""}
-                  </span>
-                </button>
-              </form>
-            </li>
-          ))}
-        </ul>
+        <SelectOrgList
+          memberships={active.map((m) => ({
+            organizationId: m.organizationId,
+            organizationName: m.organizationName,
+            role: m.role ?? null,
+          }))}
+          returnTo={returnTo}
+        />
       </div>
     </main>
   );

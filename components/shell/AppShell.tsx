@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import { Avatar } from "@/components/catalyst/avatar";
+import { OrgSwitchingOverlay } from "@/components/shell/OrgSwitchingOverlay";
 import {
   Dropdown,
   DropdownButton,
@@ -96,149 +98,166 @@ export function AppShell({
   children,
 }: Props) {
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
+  const [pendingOrgName, setPendingOrgName] = useState<string | null>(null);
 
   const otherOrgs = memberships.filter(
     (m) => m.organizationId !== currentOrgId && m.status === "active",
   );
 
+  function handleSwitchOrg(organizationId: string, organizationName: string) {
+    setPendingOrgName(organizationName);
+    startTransition(async () => {
+      // switchOrgAction throws NEXT_REDIRECT on success; React keeps the
+      // transition pending through the navigation, so the overlay stays up
+      // until the new page renders (and this AppShell remounts).
+      await switchOrgAction(organizationId, "/dashboard");
+    });
+  }
+
   return (
-    <SidebarLayout
-      navbar={
-        <Navbar>
-          <NavbarSpacer />
-          <NavbarSection>
-            <Dropdown>
-              <DropdownButton as={NavbarItem}>
-                <Avatar initials={initials(user.name)} square />
-              </DropdownButton>
-              <AccountDropdownMenu anchor="bottom end" />
-            </Dropdown>
-          </NavbarSection>
-        </Navbar>
-      }
-      sidebar={
-        <Sidebar>
-          <SidebarHeader>
-            <Dropdown>
-              <DropdownButton as={SidebarItem}>
-                <Avatar initials={initials(currentOrgName)} />
-                <SidebarLabel>{currentOrgName}</SidebarLabel>
-                <ChevronDownIcon />
-              </DropdownButton>
-              <DropdownMenu
-                className="min-w-80 lg:min-w-64"
-                anchor="bottom start"
-              >
-                <DropdownItem href="/settings">
-                  <Cog6ToothIcon />
-                  <DropdownLabel>Settings</DropdownLabel>
-                </DropdownItem>
-                {currentOrgSlug ? (
-                  <DropdownItem disabled>
-                    <DropdownLabel className="text-xs text-zinc-500">
-                      {currentOrgSlug}
-                    </DropdownLabel>
-                  </DropdownItem>
-                ) : null}
-                {otherOrgs.length > 0 ? (
-                  <>
-                    <DropdownDivider />
-                    {otherOrgs.map((m) => (
-                      <DropdownItem
-                        key={m.organizationId}
-                        onClick={() => {
-                          // Server Action; throws NEXT_REDIRECT on success,
-                          // which Next handles by navigating.
-                          void switchOrgAction(m.organizationId, "/dashboard");
-                        }}
-                      >
-                        <Avatar
-                          slot="icon"
-                          initials={initials(m.organizationName)}
-                        />
-                        <DropdownLabel>{m.organizationName}</DropdownLabel>
-                      </DropdownItem>
-                    ))}
-                  </>
-                ) : null}
-                <DropdownDivider />
-                <DropdownItem href="/select-org">
-                  <PlusIcon />
-                  <DropdownLabel>Manage organizations</DropdownLabel>
-                </DropdownItem>
-              </DropdownMenu>
-            </Dropdown>
-          </SidebarHeader>
-
-          <SidebarBody>
-            <SidebarSection>
-              <SidebarItem
-                href="/dashboard"
-                current={pathname === "/dashboard"}
-              >
-                <HomeIcon />
-                <SidebarLabel>Dashboard</SidebarLabel>
-              </SidebarItem>
-              <SidebarItem
-                href="/patients"
-                current={pathname.startsWith("/patients")}
-              >
-                <UsersIcon />
-                <SidebarLabel>Patients</SidebarLabel>
-              </SidebarItem>
-              <SidebarItem
-                href="/settings"
-                current={
-                  pathname === "/settings" ||
-                  (pathname.startsWith("/settings/") &&
-                    !pathname.startsWith("/settings/team"))
-                }
-              >
-                <Cog6ToothIcon />
-                <SidebarLabel>Settings</SidebarLabel>
-              </SidebarItem>
-              {isTenantAdmin ? (
-                <SidebarItem
-                  href="/settings/team"
-                  current={pathname.startsWith("/settings/team")}
+    <>
+      <OrgSwitchingOverlay orgName={isPending ? pendingOrgName : null} />
+      <SidebarLayout
+        navbar={
+          <Navbar>
+            <NavbarSpacer />
+            <NavbarSection>
+              <Dropdown>
+                <DropdownButton as={NavbarItem}>
+                  <Avatar initials={initials(user.name)} square />
+                </DropdownButton>
+                <AccountDropdownMenu anchor="bottom end" />
+              </Dropdown>
+            </NavbarSection>
+          </Navbar>
+        }
+        sidebar={
+          <Sidebar>
+            <SidebarHeader>
+              <Dropdown>
+                <DropdownButton as={SidebarItem}>
+                  <Avatar initials={initials(currentOrgName)} />
+                  <SidebarLabel>{currentOrgName}</SidebarLabel>
+                  <ChevronDownIcon />
+                </DropdownButton>
+                <DropdownMenu
+                  className="min-w-80 lg:min-w-64"
+                  anchor="bottom start"
                 >
-                  <UserGroupIcon />
-                  <SidebarLabel>Team</SidebarLabel>
+                  <DropdownItem href="/settings">
+                    <Cog6ToothIcon />
+                    <DropdownLabel>Settings</DropdownLabel>
+                  </DropdownItem>
+                  {currentOrgSlug ? (
+                    <DropdownItem disabled>
+                      <DropdownLabel className="text-xs text-zinc-500">
+                        {currentOrgSlug}
+                      </DropdownLabel>
+                    </DropdownItem>
+                  ) : null}
+                  {otherOrgs.length > 0 ? (
+                    <>
+                      <DropdownDivider />
+                      {otherOrgs.map((m) => (
+                        <DropdownItem
+                          key={m.organizationId}
+                          disabled={isPending}
+                          onClick={() => {
+                            handleSwitchOrg(
+                              m.organizationId,
+                              m.organizationName,
+                            );
+                          }}
+                        >
+                          <Avatar
+                            slot="icon"
+                            initials={initials(m.organizationName)}
+                          />
+                          <DropdownLabel>{m.organizationName}</DropdownLabel>
+                        </DropdownItem>
+                      ))}
+                    </>
+                  ) : null}
+                  <DropdownDivider />
+                  <DropdownItem href="/select-org">
+                    <PlusIcon />
+                    <DropdownLabel>Manage organizations</DropdownLabel>
+                  </DropdownItem>
+                </DropdownMenu>
+              </Dropdown>
+            </SidebarHeader>
+
+            <SidebarBody>
+              <SidebarSection>
+                <SidebarItem
+                  href="/dashboard"
+                  current={pathname === "/dashboard"}
+                >
+                  <HomeIcon />
+                  <SidebarLabel>Dashboard</SidebarLabel>
                 </SidebarItem>
-              ) : null}
-            </SidebarSection>
+                <SidebarItem
+                  href="/patients"
+                  current={pathname.startsWith("/patients")}
+                >
+                  <UsersIcon />
+                  <SidebarLabel>Patients</SidebarLabel>
+                </SidebarItem>
+                <SidebarItem
+                  href="/settings"
+                  current={
+                    pathname === "/settings" ||
+                    (pathname.startsWith("/settings/") &&
+                      !pathname.startsWith("/settings/team"))
+                  }
+                >
+                  <Cog6ToothIcon />
+                  <SidebarLabel>Settings</SidebarLabel>
+                </SidebarItem>
+                {isTenantAdmin ? (
+                  <SidebarItem
+                    href="/settings/team"
+                    current={pathname.startsWith("/settings/team")}
+                  >
+                    <UserGroupIcon />
+                    <SidebarLabel>Team</SidebarLabel>
+                  </SidebarItem>
+                ) : null}
+              </SidebarSection>
 
-            <SidebarSpacer />
-          </SidebarBody>
+              <SidebarSpacer />
+            </SidebarBody>
 
-          <SidebarFooter className="max-lg:hidden">
-            <Dropdown>
-              <DropdownButton as={SidebarItem}>
-                <span className="flex min-w-0 items-center gap-3">
-                  <Avatar
-                    initials={initials(user.name)}
-                    className="size-10"
-                    square
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm/5 font-medium text-zinc-950 dark:text-white">
-                      {user.name}
-                    </span>
-                    <span className="block truncate text-xs/5 font-normal text-zinc-500 dark:text-zinc-400">
-                      {user.email}
+            <SidebarFooter className="max-lg:hidden">
+              <Dropdown>
+                <DropdownButton as={SidebarItem}>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <Avatar
+                      initials={initials(user.name)}
+                      className="size-10"
+                      square
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm/5 font-medium text-zinc-950 dark:text-white">
+                        {user.name}
+                      </span>
+                      <span className="block truncate text-xs/5 font-normal text-zinc-500 dark:text-zinc-400">
+                        {user.email}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <ChevronUpIcon />
-              </DropdownButton>
-              <AccountDropdownMenu anchor="top start" />
-            </Dropdown>
-          </SidebarFooter>
-        </Sidebar>
-      }
-    >
-      {children}
-    </SidebarLayout>
+                  <ChevronUpIcon />
+                </DropdownButton>
+                <AccountDropdownMenu anchor="top start" />
+              </Dropdown>
+            </SidebarFooter>
+          </Sidebar>
+        }
+      >
+        {children}
+      </SidebarLayout>
+    </>
   );
 }
 
