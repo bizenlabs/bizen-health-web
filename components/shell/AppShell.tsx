@@ -137,7 +137,10 @@ export function AppShell({
             <SidebarHeader>
               <Dropdown>
                 <DropdownButton as={SidebarItem}>
-                  <Avatar initials={initials(currentOrgName)} />
+                  <Avatar
+                    initials={initials(currentOrgName)}
+                    className={orgAvatarColor(currentOrgId)}
+                  />
                   <SidebarLabel>{currentOrgName}</SidebarLabel>
                   <ChevronDownIcon />
                 </DropdownButton>
@@ -173,6 +176,7 @@ export function AppShell({
                           <Avatar
                             slot="icon"
                             initials={initials(m.organizationName)}
+                            className={orgAvatarColor(m.organizationId)}
                           />
                           <DropdownLabel>{m.organizationName}</DropdownLabel>
                         </DropdownItem>
@@ -266,4 +270,28 @@ function initials(name: string): string {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Stand-in for a tenant logo: deterministic color from the org id so each
+// tenant gets a stable, distinguishable swatch. Keyed off id (not name) so
+// renaming the workspace doesn't reshuffle the color.
+const ORG_AVATAR_COLORS = [
+  "bg-rose-600 text-white",
+  "bg-orange-600 text-white",
+  "bg-amber-600 text-white",
+  "bg-emerald-600 text-white",
+  "bg-teal-600 text-white",
+  "bg-sky-600 text-white",
+  "bg-blue-600 text-white",
+  "bg-indigo-600 text-white",
+  "bg-violet-600 text-white",
+  "bg-fuchsia-600 text-white",
+] as const;
+
+function orgAvatarColor(orgId: string): string {
+  let hash = 0;
+  for (let i = 0; i < orgId.length; i++) {
+    hash = (hash * 31 + orgId.charCodeAt(i)) | 0;
+  }
+  return ORG_AVATAR_COLORS[Math.abs(hash) % ORG_AVATAR_COLORS.length];
 }
