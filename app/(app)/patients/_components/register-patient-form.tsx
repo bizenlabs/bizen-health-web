@@ -14,7 +14,6 @@ import {
   Legend,
 } from "@/components/catalyst/fieldset";
 import { Input } from "@/components/catalyst/input";
-import { Radio, RadioField, RadioGroup } from "@/components/catalyst/radio";
 import { Select } from "@/components/catalyst/select";
 import { Text } from "@/components/catalyst/text";
 import type { IdentifierType } from "@/lib/patients";
@@ -28,6 +27,7 @@ type FormState = {
 const INITIAL_STATE: FormState = { error: null, fieldErrors: {} };
 
 const GENDERS: { value: string; label: string }[] = [
+  { value: "", label: "—" },
   { value: "FEMALE", label: "Female" },
   { value: "MALE", label: "Male" },
   { value: "OTHER", label: "Other" },
@@ -127,23 +127,16 @@ export function RegisterPatientForm({
           </div>
 
           <div className="sm:col-span-3">
-            <Fieldset>
-              <Legend className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-                Gender
-              </Legend>
-              <RadioGroup
-                name="gender"
-                defaultValue=""
-                className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3"
-              >
+            <Field>
+              <Label>Gender</Label>
+              <Select name="gender" defaultValue="">
                 {GENDERS.map((g) => (
-                  <RadioField key={g.value}>
-                    <Radio value={g.value} />
-                    <Label>{g.label}</Label>
-                  </RadioField>
+                  <option key={g.value} value={g.value}>
+                    {g.label}
+                  </option>
                 ))}
-              </RadioGroup>
-            </Fieldset>
+              </Select>
+            </Field>
           </div>
 
           <div className="sm:col-span-3">
