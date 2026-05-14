@@ -59,7 +59,7 @@ export function EditPatientForm({ patient }: { patient: PatientDetail }) {
 
       <div className="space-y-12">
         <FormSection
-          title="Name"
+          title="Basic info"
           description="At least one of given or family name."
         >
           <div className="sm:col-span-2">
@@ -100,9 +100,7 @@ export function EditPatientForm({ patient }: { patient: PatientDetail }) {
               ) : null}
             </Field>
           </div>
-        </FormSection>
 
-        <FormSection title="Demographics">
           <div className="sm:col-span-3">
             <Field>
               <Label>Gender</Label>

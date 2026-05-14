@@ -84,9 +84,9 @@ export function RegisterPatientForm({
       ) : null}
 
       <div className="space-y-12">
-        {/* — Name — */}
+        {/* — Basic info — */}
         <FormSection
-          title="Name"
+          title="Basic info"
           description="At least one of given or family name. Stored exactly as entered — no normalisation."
           tone="required"
         >
@@ -125,10 +125,7 @@ export function RegisterPatientForm({
               )}
             </Field>
           </div>
-        </FormSection>
 
-        {/* — Demographics — */}
-        <FormSection title="Demographics">
           <div className="sm:col-span-3">
             <Fieldset>
               <Legend className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
@@ -216,40 +213,39 @@ export function RegisterPatientForm({
               ) : null}
             </Fieldset>
           </div>
+
+          {identifierTypes.length > 0 ? (
+            <>
+              <div className="sm:col-span-3">
+                <Field>
+                  <Label>Identifier type</Label>
+                  <Description>
+                    Optional. Add one now (e.g. Aadhaar, MRN); more can be added
+                    later.
+                  </Description>
+                  <Select name="identifierTypeId" defaultValue="">
+                    <option value="">— None —</option>
+                    {identifierTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              <div className="sm:col-span-3">
+                <Field>
+                  <Label>Identifier value</Label>
+                  <Description>Required if a type is chosen.</Description>
+                  <Input name="identifierValue" autoComplete="off" />
+                </Field>
+              </div>
+            </>
+          ) : null}
         </FormSection>
 
         {/* — Address — */}
-        <AddressSection />
-
-        {/* — Identifier — */}
-        {identifierTypes.length > 0 ? (
-          <FormSection
-            title="Identifier"
-            description="Add one now (e.g. Aadhaar, MRN). More can be added later."
-            tone="optional"
-            last
-          >
-            <div className="sm:col-span-3">
-              <Field>
-                <Label>Type</Label>
-                <Select name="identifierTypeId" defaultValue="">
-                  <option value="">— None —</option>
-                  {identifierTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <div className="sm:col-span-3">
-              <Field>
-                <Label>Value</Label>
-                <Input name="identifierValue" autoComplete="off" />
-              </Field>
-            </div>
-          </FormSection>
-        ) : null}
+        <AddressSection last />
       </div>
 
       <div className="mt-6 flex items-center justify-end gap-x-6">
@@ -343,8 +339,10 @@ function SegmentedToggle<T extends string>({
 
 function AddressSection({
   defaultValues,
+  last = false,
 }: {
   defaultValues?: Partial<Record<AddressKey, string | null>>;
+  last?: boolean;
 }) {
   const hasAny = defaultValues
     ? Object.values(defaultValues).some(Boolean)
@@ -352,7 +350,13 @@ function AddressSection({
   const [open, setOpen] = useState(hasAny);
 
   return (
-    <div className="border-b border-zinc-950/10 pb-12 dark:border-white/10">
+    <div
+      className={
+        last
+          ? undefined
+          : "border-b border-zinc-950/10 pb-12 dark:border-white/10"
+      }
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
