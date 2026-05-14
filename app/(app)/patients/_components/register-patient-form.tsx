@@ -18,6 +18,7 @@ import { Select } from "@/components/catalyst/select";
 import { Text } from "@/components/catalyst/text";
 import type { IdentifierType } from "@/lib/patients";
 import { registerPatientAction } from "../actions";
+import { DatePicker } from "./date-picker";
 
 type FormState = {
   error: string | null;
@@ -56,7 +57,7 @@ export function RegisterPatientForm({
   const [estimatedAge, setEstimatedAge] = useState("");
 
   // Live feedback so receptionists catch typos before submit.
-  const ageFromDob = useMemo(() => computeAge(birthdate), [birthdate]);
+  const ageFromDob = useMemo(() => describeAge(birthdate), [birthdate]);
   const yearFromEstimate = useMemo(() => {
     const n = Number(estimatedAge);
     if (!Number.isFinite(n) || n < 0 || n > 130) return null;
@@ -127,19 +128,6 @@ export function RegisterPatientForm({
           </div>
 
           <div className="sm:col-span-3">
-            <Field>
-              <Label>Gender</Label>
-              <Select name="gender" defaultValue="">
-                {GENDERS.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-
-          <div className="sm:col-span-3">
             <Fieldset>
               <Legend className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
                 Age
@@ -153,16 +141,18 @@ export function RegisterPatientForm({
               {ageMode === "dob" ? (
                 <Field className="mt-4">
                   <Label className="sr-only">Date of birth</Label>
-                  <Input
-                    type="date"
+                  <DatePicker
                     name="birthdate"
                     value={birthdate}
-                    onChange={(e) => setBirthdate(e.target.value)}
+                    onChange={setBirthdate}
                     max={new Date().toISOString().slice(0, 10)}
+                    placeholder="Select date of birth"
                   />
                   {ageFromDob !== null ? (
                     <Description>
-                      ≈ {ageFromDob} {ageFromDob === 1 ? "year" : "years"} old
+                      {ageFromDob === "newborn"
+                        ? "Newborn"
+                        : `≈ ${ageFromDob} old`}
                     </Description>
                   ) : null}
                 </Field>
@@ -205,6 +195,19 @@ export function RegisterPatientForm({
                 </Text>
               ) : null}
             </Fieldset>
+          </div>
+
+          <div className="sm:col-span-3">
+            <Field>
+              <Label>Gender</Label>
+              <Select name="gender" defaultValue="">
+                {GENDERS.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </div>
 
           {identifierTypes.length > 0 ? (
@@ -302,7 +305,7 @@ function SegmentedToggle<T extends string>({
   return (
     <div
       role="radiogroup"
-      className="mt-3 inline-flex rounded-lg border border-zinc-950/10 bg-zinc-50 p-1 text-sm dark:border-white/10 dark:bg-zinc-900/60"
+      className="mt-3 inline-flex rounded-full border border-zinc-950/10 bg-zinc-50 p-1 text-sm dark:border-white/10 dark:bg-zinc-800/40"
     >
       {options.map((opt) => {
         const active = opt.value === value;
@@ -315,8 +318,8 @@ function SegmentedToggle<T extends string>({
             onClick={() => onChange(opt.value)}
             className={
               active
-                ? "rounded-md bg-white px-3 py-1.5 font-medium text-zinc-950 shadow-sm dark:bg-zinc-700 dark:text-white"
-                : "rounded-md px-3 py-1.5 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                ? "rounded-full bg-zinc-600 px-4 py-1.5 font-semibold text-white shadow-sm ring-1 ring-zinc-700/20 transition-colors dark:bg-zinc-300 dark:text-zinc-900 dark:ring-white/10"
+                : "rounded-full px-4 py-1.5 text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
             }
           >
             {opt.label}
@@ -450,14 +453,28 @@ const ADDRESS_FIELDS: {
   },
 ];
 
-function computeAge(isoDate: string): number | null {
+function describeAge(isoDate: string): string | null {
   if (!isoDate) return null;
   const d = new Date(isoDate);
   if (Number.isNaN(d.getTime())) return null;
   const now = new Date();
-  let age = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-  if (age < 0 || age > 130) return null;
-  return age;
+
+  let years = now.getFullYear() - d.getFullYear();
+  let months = now.getMonth() - d.getMonth();
+  let days = now.getDate() - d.getDate();
+  if (days < 0) {
+    months--;
+    const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  if (years < 0 || years > 130) return null;
+
+  if (years >= 1) return `${years} ${years === 1 ? "year" : "years"}`;
+  if (months >= 1) return `${months} ${months === 1 ? "month" : "months"}`;
+  if (days >= 1) return `${days} ${days === 1 ? "day" : "days"}`;
+  return "newborn";
 }
