@@ -62,6 +62,16 @@ export const listObservationsForPatient = (
     `/v1/observations?patientId=${patientId}&page=${p.page ?? 0}&size=${p.size ?? 50}`,
   );
 
+export const listObservationsForPatientAndConcept = (
+  patientId: string,
+  conceptId: string,
+  p: { page?: number; size?: number } = {},
+) =>
+  api<ObservationsPage>(
+    `/v1/observations?patientId=${patientId}&conceptId=${conceptId}` +
+      `&page=${p.page ?? 0}&size=${p.size ?? 500}`,
+  );
+
 export const recordObservation = (body: RecordObservationInput) =>
   api<Observation>(`/v1/observations`, {
     method: "POST",

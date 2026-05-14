@@ -133,7 +133,10 @@ export default async function PatientDetailPage({
         )}
 
         {patient.voided ? null : (
-          <VitalsTrendSection observations={observationsPage.content} />
+          <VitalsTrendSection
+            patientId={patient.id}
+            observations={observationsPage.content}
+          />
         )}
 
         <EncountersSection

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Observation } from "@/lib/observations";
 
 type Series = {
@@ -8,8 +9,10 @@ type Series = {
 };
 
 export function VitalsTrendSection({
+  patientId,
   observations,
 }: {
+  patientId: string;
   observations: Observation[];
 }) {
   const series = buildSeries(observations);
@@ -25,30 +28,34 @@ export function VitalsTrendSection({
       </h2>
       <ul className="mt-3 divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
         {series.map((s) => (
-          <li
-            key={s.conceptId}
-            className="flex items-center justify-between gap-6 px-4 py-3 text-sm"
-          >
-            <div className="min-w-0 shrink-0">
-              <div className="text-xs text-zinc-500">{s.conceptName}</div>
-              <div className="font-medium">
-                {formatLatest(s)}
-                {s.units ? (
-                  <span className="ml-1 text-xs text-zinc-500">{s.units}</span>
-                ) : null}
+          <li key={s.conceptId}>
+            <Link
+              href={`/patients/${patientId}/trends/${s.conceptId}`}
+              className="flex items-center justify-between gap-6 px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            >
+              <div className="min-w-0 shrink-0">
+                <div className="text-xs text-zinc-500">{s.conceptName}</div>
+                <div className="font-medium">
+                  {formatLatest(s)}
+                  {s.units ? (
+                    <span className="ml-1 text-xs text-zinc-500">
+                      {s.units}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-xs text-zinc-400">
+                  {s.points.length} value{s.points.length === 1 ? "" : "s"} ·{" "}
+                  {new Date(
+                    s.points[s.points.length - 1].observedAt,
+                  ).toLocaleDateString()}
+                </div>
               </div>
-              <div className="text-xs text-zinc-400">
-                {s.points.length} value{s.points.length === 1 ? "" : "s"} ·{" "}
-                {new Date(
-                  s.points[s.points.length - 1].observedAt,
-                ).toLocaleDateString()}
-              </div>
-            </div>
-            {s.points.length >= 2 ? (
-              <Sparkline series={s} />
-            ) : (
-              <span className="text-xs text-zinc-400">—</span>
-            )}
+              {s.points.length >= 2 ? (
+                <Sparkline series={s} />
+              ) : (
+                <span className="text-xs text-zinc-400">—</span>
+              )}
+            </Link>
           </li>
         ))}
       </ul>
