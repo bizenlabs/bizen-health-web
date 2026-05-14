@@ -46,9 +46,26 @@ export function ObservationsPanel({
   );
 }
 
-function formatValue(o: Observation): string {
+function formatValue(o: Observation): React.ReactNode {
   if (o.valueNumeric !== null) {
     return o.valueUnits ? `${o.valueNumeric} ${o.valueUnits}` : o.valueNumeric;
+  }
+  if (o.valueCode !== null) {
+    return (
+      <span>
+        {o.valueCodeSystem ? (
+          <span className="mr-1 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            {o.valueCodeSystem}
+          </span>
+        ) : null}
+        <span className="font-mono">{o.valueCode}</span>
+        {o.valueCodeDisplay ? (
+          <span className="ml-2 text-zinc-600 dark:text-zinc-400">
+            {o.valueCodeDisplay}
+          </span>
+        ) : null}
+      </span>
+    );
   }
   return o.valueText ?? "";
 }
@@ -165,6 +182,60 @@ function AddObservationForm({
             <input type="hidden" name="dataType" value="TEXT" />
           </div>
         ) : null}
+
+        {selected?.dataType === "CODED" ? (
+          <div className="grid grid-cols-1 gap-3 md:col-span-2 md:grid-cols-[120px_1fr]">
+            <div>
+              <label
+                htmlFor="valueCodeSystem"
+                className="block text-xs text-zinc-500"
+              >
+                System
+              </label>
+              <input
+                id="valueCodeSystem"
+                name="valueCodeSystem"
+                type="text"
+                defaultValue={defaultCodeSystem(selected.name)}
+                placeholder="e.g. ICD-10"
+                required
+                className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="valueCode"
+                className="block text-xs text-zinc-500"
+              >
+                Code
+              </label>
+              <input
+                id="valueCode"
+                name="valueCode"
+                type="text"
+                placeholder="e.g. J18.9"
+                required
+                className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 font-mono text-sm dark:border-zinc-800 dark:bg-transparent"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label
+                htmlFor="valueCodeDisplay"
+                className="block text-xs text-zinc-500"
+              >
+                Display (optional)
+              </label>
+              <input
+                id="valueCodeDisplay"
+                name="valueCodeDisplay"
+                type="text"
+                placeholder="e.g. Pneumonia, unspecified organism"
+                className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
+              />
+            </div>
+            <input type="hidden" name="dataType" value="CODED" />
+          </div>
+        ) : null}
       </div>
 
       {state.error ? (
@@ -178,6 +249,15 @@ function AddObservationForm({
       </div>
     </form>
   );
+}
+
+function defaultCodeSystem(conceptName: string): string {
+  // Pre-fill from the concept name when the convention is obvious — saves
+  // clinicians one click. Leave blank for generic CODED concepts so the
+  // free-text field surfaces.
+  if (conceptName.toUpperCase().startsWith("ICD-10")) return "ICD-10";
+  if (conceptName.toUpperCase().startsWith("SNOMED")) return "SNOMED-CT";
+  return "";
 }
 
 function SubmitChip({

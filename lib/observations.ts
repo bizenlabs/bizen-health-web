@@ -1,7 +1,7 @@
 import "server-only";
 import { api } from "@/lib/api";
 
-export type ConceptDataType = "NUMERIC" | "TEXT";
+export type ConceptDataType = "NUMERIC" | "TEXT" | "CODED";
 
 export type Concept = {
   id: string;
@@ -20,6 +20,9 @@ export type Observation = {
   valueNumeric: string | null;
   valueText: string | null;
   valueUnits: string | null;
+  valueCodeSystem: string | null;
+  valueCode: string | null;
+  valueCodeDisplay: string | null;
   observedAt: string;
   recordedBy: string | null;
   voided: boolean;
@@ -32,6 +35,9 @@ export type RecordObservationInput = {
   conceptId: string;
   valueNumeric: string | null;
   valueText: string | null;
+  valueCodeSystem: string | null;
+  valueCode: string | null;
+  valueCodeDisplay: string | null;
   observedAt: string | null;
 };
 

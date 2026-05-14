@@ -171,6 +171,11 @@ export async function recordObservationAction(
   const dataType = (formData.get("dataType") ?? "").toString();
   const numericStr = (formData.get("valueNumeric") ?? "").toString().trim();
   const text = (formData.get("valueText") ?? "").toString().trim() || null;
+  const codeSystem =
+    (formData.get("valueCodeSystem") ?? "").toString().trim() || null;
+  const code = (formData.get("valueCode") ?? "").toString().trim() || null;
+  const codeDisplay =
+    (formData.get("valueCodeDisplay") ?? "").toString().trim() || null;
 
   if (!conceptId) {
     return { error: "Concept is required." };
@@ -178,6 +183,9 @@ export async function recordObservationAction(
 
   let valueNumeric: string | null = null;
   let valueText: string | null = null;
+  let valueCodeSystem: string | null = null;
+  let valueCode: string | null = null;
+  let valueCodeDisplay: string | null = null;
   if (dataType === "NUMERIC") {
     if (!numericStr) return { error: "Numeric value is required." };
     if (!Number.isFinite(Number(numericStr))) {
@@ -187,6 +195,12 @@ export async function recordObservationAction(
   } else if (dataType === "TEXT") {
     if (!text) return { error: "Text value is required." };
     valueText = text;
+  } else if (dataType === "CODED") {
+    if (!codeSystem) return { error: "Code system is required." };
+    if (!code) return { error: "Code is required." };
+    valueCodeSystem = codeSystem;
+    valueCode = code;
+    valueCodeDisplay = codeDisplay;
   } else {
     return { error: "Unsupported concept data type." };
   }
@@ -197,6 +211,9 @@ export async function recordObservationAction(
       conceptId,
       valueNumeric,
       valueText,
+      valueCodeSystem,
+      valueCode,
+      valueCodeDisplay,
       observedAt: null,
     });
   } catch (err) {

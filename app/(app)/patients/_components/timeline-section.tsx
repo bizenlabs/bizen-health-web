@@ -77,6 +77,11 @@ function formatValue(o: Observation): string {
   if (o.valueNumeric !== null) {
     return o.valueUnits ? `${o.valueNumeric} ${o.valueUnits}` : o.valueNumeric;
   }
+  if (o.valueCode !== null) {
+    const system = o.valueCodeSystem ? `${o.valueCodeSystem} ` : "";
+    const display = o.valueCodeDisplay ? ` — ${o.valueCodeDisplay}` : "";
+    return `${system}${o.valueCode}${display}`;
+  }
   return o.valueText ?? "";
 }
 
