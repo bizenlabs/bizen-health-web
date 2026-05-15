@@ -28,7 +28,8 @@ const VALID_GENDERS: ReadonlySet<Gender> = new Set([
 ]);
 
 // Shape only — defined in the client component since "use server" files can
-// only export async functions. See app/(app)/patients/_components/register-patient-form.tsx.
+// only export async functions. See app/(app)/patients/_components/patient-form.tsx
+// (exported there as PatientFormState).
 type RegisterPatientFormState = {
   error: string | null;
   fieldErrors: Record<string, string>;

@@ -16,17 +16,24 @@ import {
 import { Input } from "@/components/catalyst/input";
 import { Select } from "@/components/catalyst/select";
 import { Text } from "@/components/catalyst/text";
-import type { IdentifierType } from "@/lib/patients";
-import { registerPatientAction } from "../actions";
+import type { IdentifierType, PatientDetail } from "@/lib/patients";
 import { DatePicker } from "./date-picker";
 import { PhotoInput } from "./photo-input";
 
-type FormState = {
+// Shape matches the {register,update}PatientAction return type in actions.ts.
+// Kept here (not imported) because "use server" files only export functions.
+export type PatientFormState = {
   error: string | null;
   fieldErrors: Record<string, string>;
 };
 
-const INITIAL_STATE: FormState = { error: null, fieldErrors: {} };
+const INITIAL_STATE: PatientFormState = { error: null, fieldErrors: {} };
+
+/** A server action already bound to its target (patient id, etc.). */
+type BoundFormAction = (
+  prev: PatientFormState,
+  formData: FormData,
+) => Promise<PatientFormState>;
 
 const GENDERS: { value: string; label: string }[] = [
   { value: "", label: "—" },
@@ -44,18 +51,50 @@ const AGE_MODES: { value: AgeMode; label: string }[] = [
   { value: "unknown", label: "Unknown" },
 ];
 
-export function RegisterPatientForm({
-  identifierTypes,
-}: {
-  identifierTypes: IdentifierType[];
-}) {
-  const [state, formAction, isPending] = useActionState(
-    registerPatientAction,
-    INITIAL_STATE,
+type PatientFormProps =
+  | {
+      mode: "register";
+      action: BoundFormAction;
+      identifierTypes: IdentifierType[];
+    }
+  | {
+      mode: "edit";
+      action: BoundFormAction;
+      patient: PatientDetail;
+    };
+
+/**
+ * Single source of truth for the patient demographics form, shared by the
+ * register (`/patients/new`) and edit (`/patients/[id]/edit`) routes. The
+ * `mode` prop drives the only real differences:
+ *
+ * - register: photo capture + inline identifier, blank fields, multipart submit
+ * - edit: pre-filled from `patient`; photo + identifiers are managed elsewhere
+ *
+ * Both use the same age UX (segmented toggle + `DatePicker` + live feedback).
+ */
+export function PatientForm(props: PatientFormProps) {
+  const { mode, action } = props;
+  const patient = mode === "edit" ? props.patient : null;
+
+  const [state, formAction, isPending] = useActionState(action, INITIAL_STATE);
+
+  // Seed the age controls from the patient on edit; blank on register.
+  const seedBirthdate = patient?.demographics.birthdate ?? null;
+  const seedEstimated = patient?.demographics.birthdateEstimated ?? false;
+
+  const [ageMode, setAgeMode] = useState<AgeMode>(() => {
+    if (seedBirthdate) return seedEstimated ? "estimated" : "dob";
+    return mode === "register" ? "dob" : "unknown";
+  });
+  const [birthdate, setBirthdate] = useState(
+    seedBirthdate && !seedEstimated ? seedBirthdate : "",
   );
-  const [ageMode, setAgeMode] = useState<AgeMode>("dob");
-  const [birthdate, setBirthdate] = useState("");
-  const [estimatedAge, setEstimatedAge] = useState("");
+  const [estimatedAge, setEstimatedAge] = useState(
+    seedBirthdate && seedEstimated
+      ? String(new Date().getFullYear() - Number(seedBirthdate.slice(0, 4)))
+      : "",
+  );
 
   // Live feedback so receptionists catch typos before submit.
   const ageFromDob = useMemo(() => describeAge(birthdate), [birthdate]);
@@ -65,10 +104,23 @@ export function RegisterPatientForm({
     return new Date().getFullYear() - Math.floor(n);
   }, [estimatedAge]);
 
+  const cancelHref =
+    mode === "register" ? "/patients" : `/patients/${patient!.id}`;
+  const submitLabel =
+    mode === "register"
+      ? isPending
+        ? "Registering…"
+        : "Register patient"
+      : isPending
+        ? "Saving…"
+        : "Save changes";
+  const errorTitle =
+    mode === "register" ? "Couldn’t register patient" : "Couldn’t save changes";
+
   return (
     <form
       action={formAction}
-      encType="multipart/form-data"
+      encType={mode === "register" ? "multipart/form-data" : undefined}
       className="mt-8 max-w-3xl"
     >
       {state.error ? (
@@ -81,7 +133,7 @@ export function RegisterPatientForm({
             aria-hidden="true"
           />
           <div>
-            <p className="font-semibold">Couldn’t register patient</p>
+            <p className="font-semibold">{errorTitle}</p>
             <p className="mt-0.5 text-red-800/90 dark:text-red-200/90">
               {state.error}
             </p>
@@ -93,7 +145,7 @@ export function RegisterPatientForm({
         {/* — Basic info — */}
         <FormSection
           title="Basic info"
-          description="At least one of given or family name. Stored exactly as entered — no normalisation."
+          description="At least one of given or family name."
           tone="required"
         >
           <div className="sm:col-span-2">
@@ -101,7 +153,8 @@ export function RegisterPatientForm({
               <Label>Given name</Label>
               <Input
                 name="givenName"
-                autoFocus
+                defaultValue={patient?.name.givenName ?? ""}
+                autoFocus={mode === "register"}
                 autoComplete="off"
                 invalid={!!state.fieldErrors.givenName}
               />
@@ -113,7 +166,11 @@ export function RegisterPatientForm({
           <div className="sm:col-span-2">
             <Field>
               <Label>Middle name</Label>
-              <Input name="middleName" autoComplete="off" />
+              <Input
+                name="middleName"
+                defaultValue={patient?.name.middleName ?? ""}
+                autoComplete="off"
+              />
             </Field>
           </div>
           <div className="sm:col-span-2">
@@ -121,6 +178,7 @@ export function RegisterPatientForm({
               <Label>Family name</Label>
               <Input
                 name="familyName"
+                defaultValue={patient?.name.familyName ?? ""}
                 autoComplete="off"
                 invalid={!!state.fieldErrors.familyName}
               />
@@ -130,9 +188,11 @@ export function RegisterPatientForm({
             </Field>
           </div>
 
-          <div className="sm:col-span-6">
-            <PhotoInput />
-          </div>
+          {mode === "register" ? (
+            <div className="sm:col-span-6">
+              <PhotoInput />
+            </div>
+          ) : null}
 
           <div className="sm:col-span-3">
             <Fieldset>
@@ -207,7 +267,10 @@ export function RegisterPatientForm({
           <div className="sm:col-span-3">
             <Field>
               <Label>Gender</Label>
-              <Select name="gender" defaultValue="">
+              <Select
+                name="gender"
+                defaultValue={patient?.demographics.gender ?? ""}
+              >
                 {GENDERS.map((g) => (
                   <option key={g.value} value={g.value}>
                     {g.label}
@@ -217,7 +280,7 @@ export function RegisterPatientForm({
             </Field>
           </div>
 
-          {identifierTypes.length > 0 ? (
+          {mode === "register" && props.identifierTypes.length > 0 ? (
             <>
               <div className="sm:col-span-3">
                 <Field>
@@ -225,7 +288,7 @@ export function RegisterPatientForm({
                   <Description>Optional.</Description>
                   <Select name="identifierTypeId" defaultValue="">
                     <option value="">— None —</option>
-                    {identifierTypes.map((t) => (
+                    {props.identifierTypes.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}
                       </option>
@@ -245,15 +308,15 @@ export function RegisterPatientForm({
         </FormSection>
 
         {/* — Address — */}
-        <AddressSection last />
+        <AddressSection defaultValues={patient?.address} last />
       </div>
 
       <div className="mt-6 flex items-center justify-end gap-x-6">
-        <Button href="/patients" plain>
+        <Button href={cancelHref} plain>
           Cancel
         </Button>
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Registering…" : "Register patient"}
+          {submitLabel}
         </Button>
       </div>
     </form>

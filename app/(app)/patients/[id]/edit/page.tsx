@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth";
 import { getPatient } from "@/lib/patients";
 import { ApiError } from "@/lib/api";
-import { EditPatientForm } from "../../_components/edit-patient-form";
+import { PatientForm } from "../../_components/patient-form";
+import { updatePatientAction } from "../../actions";
 
 export default async function EditPatientPage({
   params,
@@ -31,7 +32,11 @@ export default async function EditPatientPage({
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Demographics, name, and address. Identifiers are edited separately.
       </p>
-      <EditPatientForm patient={patient} />
+      <PatientForm
+        mode="edit"
+        action={updatePatientAction.bind(null, id)}
+        patient={patient}
+      />
     </div>
   );
 }
