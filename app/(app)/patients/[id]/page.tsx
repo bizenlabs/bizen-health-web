@@ -3,9 +3,16 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getIdentifierTypes, getPatient } from "@/lib/patients";
 import { listEncountersForPatient } from "@/lib/encounters";
+import {
+  listAppointmentsForPatient,
+  listRecurrencesForPatient,
+  type AppointmentDetail,
+  type AppointmentRecurrence,
+} from "@/lib/appointments";
 import { listObservationsForPatient } from "@/lib/observations";
 import { ApiError } from "@/lib/api";
 import { PatientAvatar } from "@/components/patient-avatar";
+import { AppointmentsSection } from "../_components/appointments-section";
 import { EncountersSection } from "../_components/encounters-section";
 import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
@@ -48,6 +55,12 @@ export default async function PatientDetailPage({
     : await Promise.all([
         listEncountersForPatient(patient.id, { size: 20 }),
         listObservationsForPatient(patient.id, { size: 200 }),
+      ]);
+  const [appointmentsPage, recurrences] = patient.voided
+    ? [{ content: [] as AppointmentDetail[] }, [] as AppointmentRecurrence[]]
+    : await Promise.all([
+        listAppointmentsForPatient(patient.id, { size: 20 }),
+        listRecurrencesForPatient(patient.id),
       ]);
   const encountersById = Object.fromEntries(
     encounters.content.map((e) => [e.id, e]),
@@ -164,6 +177,13 @@ export default async function PatientDetailPage({
           patientId={patient.id}
           encounters={encounters.content}
           canRecord={!patient.voided}
+        />
+
+        <AppointmentsSection
+          patientId={patient.id}
+          appointments={appointmentsPage.content}
+          recurrences={recurrences}
+          canBook={!patient.voided}
         />
 
         {patient.voided ? null : (
