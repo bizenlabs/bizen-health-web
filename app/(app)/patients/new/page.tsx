@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { getIdentifierTypes } from "@/lib/patients";
-import { RegisterPatientForm } from "../_components/register-patient-form";
+import { PatientForm } from "../_components/patient-form";
+import { registerPatientAction } from "../actions";
 
 export default async function NewPatientPage() {
   await requireSession();
@@ -13,7 +14,11 @@ export default async function NewPatientPage() {
         Only a name is required. Demographics and identifiers can be added or
         edited later.
       </p>
-      <RegisterPatientForm identifierTypes={identifierTypes} />
+      <PatientForm
+        mode="register"
+        action={registerPatientAction}
+        identifierTypes={identifierTypes}
+      />
     </div>
   );
 }
