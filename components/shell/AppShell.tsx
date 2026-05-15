@@ -39,6 +39,7 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/16/solid";
 import {
+  CalendarDaysIcon,
   Cog6ToothIcon,
   HomeIcon,
   UserGroupIcon,
@@ -207,6 +208,13 @@ export function AppShell({
                 >
                   <UsersIcon />
                   <SidebarLabel>Patients</SidebarLabel>
+                </SidebarItem>
+                <SidebarItem
+                  href="/appointments"
+                  current={pathname.startsWith("/appointments")}
+                >
+                  <CalendarDaysIcon />
+                  <SidebarLabel>Appointments</SidebarLabel>
                 </SidebarItem>
                 <SidebarItem
                   href="/settings"
