@@ -9,6 +9,7 @@ const SUBSCRIBED_EVENTS = new Set([
   "organization.updated",
   "user.created",
   "organization_membership.created",
+  "organization_membership.updated",
   "organization_membership.deleted",
 ]);
 
