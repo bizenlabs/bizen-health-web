@@ -3,3 +3,8 @@ ignoredBuiltDependencies:
   - unrs-resolver
 patchedDependencies:
   "@workos-inc/node@9.2.0": patches/@workos-inc__node@9.2.0.patch
+overrides:
+  # next@16.2.6 transitively pins postcss@8.4.31, which has an XSS advisory
+  # (GHSA-qx2v-qp2m-jg93, patched in 8.5.10). 8.5.x is a backward-compatible
+  # minor bump. Drop this once next ships a postcss >=8.5.10.
+  postcss@<8.5.10: ">=8.5.10"
