@@ -10,21 +10,28 @@ import {
 
 export type Theme = "light" | "dark" | "system";
 
-export const THEME_COOKIE = "theme";
+export const THEME_STORAGE_KEY = "theme";
 
 /**
  * Inline script for app/layout.tsx. Runs before paint to apply the persisted
- * theme, so there's no flash of the wrong palette on first render. Kept in
- * sync with `applyTheme` / `readCookie` below — same logic, no-dependency form.
+ * theme, so there's no flash of the wrong palette on first render.
+ *
+ * The preference lives in `localStorage`, NOT a cookie: a cookie would be sent
+ * on every request and add to the (already large) WorkOS session cookie
+ * header, which can tip requests past the server's header-size limit and break
+ * auth. The server never needs the theme — this script applies it client-side.
+ *
+ * The last line clears a legacy `theme` cookie left by earlier builds.
  */
-export const themeScript = `(function(){try{var m=document.cookie.match(/(?:^|; )${THEME_COOKIE}=([^;]*)/);var t=m?decodeURIComponent(m[1]):"system";var d=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
+export const themeScript = `(function(){try{var t=localStorage.getItem("${THEME_STORAGE_KEY}");var d=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);document.cookie="${THEME_STORAGE_KEY}=; path=/; max-age=0";}catch(e){}})();`;
 
-function readCookie(): Theme {
-  const m = document.cookie.match(
-    new RegExp(`(?:^|; )${THEME_COOKIE}=([^;]*)`),
-  );
-  const value = m ? decodeURIComponent(m[1]) : "";
-  return value === "light" || value === "dark" ? value : "system";
+function readStoredTheme(): Theme {
+  try {
+    const value = localStorage.getItem(THEME_STORAGE_KEY);
+    return value === "light" || value === "dark" ? value : "system";
+  } catch {
+    return "system";
+  }
 }
 
 function applyTheme(theme: Theme) {
@@ -43,13 +50,13 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // On the server we can't read the cookie, so fall back to "system"; on the
-  // client we read the real value up front. This only affects the switcher's
-  // own checkmark (the visible palette is set by the before-paint script), and
-  // the switcher lives in a closed menu that isn't in the DOM at hydration —
-  // so there's no mismatch to reconcile.
+  // Start at "system" on the server (no localStorage there); read the real
+  // value on the client. The visible palette is already correct via the
+  // before-paint script, so this only seeds the switcher's checkmark — and the
+  // switcher lives in a closed menu that isn't in the DOM at hydration, so
+  // there's no mismatch to reconcile.
   const [theme, setThemeState] = useState<Theme>(() =>
-    typeof document === "undefined" ? "system" : readCookie(),
+    typeof window === "undefined" ? "system" : readStoredTheme(),
   );
 
   // Keep "system" tracking the OS while the app is open.
@@ -63,7 +70,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);
-    document.cookie = `${THEME_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // localStorage unavailable (e.g. private mode) — theme just won't persist.
+    }
     applyTheme(next);
   }, []);
 
