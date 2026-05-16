@@ -2,12 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { inviteMemberAction } from "./actions";
-
-const ROLES = [
-  { slug: "tenant_admin", label: "Admin" },
-  { slug: "clinician", label: "Clinician" },
-  { slug: "receptionist", label: "Receptionist" },
-];
+import { ROLES } from "./roles";
 
 export function InviteForm() {
   const [email, setEmail] = useState("");
@@ -20,17 +15,14 @@ export function InviteForm() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    const invitee = email;
     startTransition(async () => {
-      try {
-        await inviteMemberAction(email, role);
-        setSuccess(`Invitation sent to ${email}`);
+      const result = await inviteMemberAction(invitee, role);
+      if (result.ok) {
+        setSuccess(`Invitation sent to ${invitee}`);
         setEmail("");
-      } catch (err) {
-        setError(
-          err instanceof Error && err.message
-            ? err.message
-            : "Failed to send invitation",
-        );
+      } else {
+        setError(result.error);
       }
     });
   }
