@@ -120,10 +120,16 @@ function AccountDropdownMenu({
         ))}
       </DropdownSection>
       <DropdownDivider />
-      <DropdownItem href="/sign-out">
-        <ArrowRightStartOnRectangleIcon />
-        <DropdownLabel>Sign out</DropdownLabel>
-      </DropdownItem>
+      {/* Sign-out is a POST, not an `href`: a `<Link>` here is prefetched the
+          moment this menu opens, and the sign-out route would clear the
+          session cookie. `contents` keeps the <form> out of the menu's
+          subgrid so the row still aligns with the other items. */}
+      <form action="/sign-out" method="post" className="contents">
+        <DropdownItem type="submit">
+          <ArrowRightStartOnRectangleIcon />
+          <DropdownLabel>Sign out</DropdownLabel>
+        </DropdownItem>
+      </form>
     </DropdownMenu>
   );
 }
