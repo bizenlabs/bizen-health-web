@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
+import { ThemeProvider, themeScript } from "@/components/shell/ThemeProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -28,9 +29,15 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
-        <AuthKitProvider>{children}</AuthKitProvider>
+        {/* Applies the persisted theme before paint to avoid a flash.
+            `themeScript` is a static, trusted constant (no interpolation). */}
+        <script>{themeScript}</script>
+        <ThemeProvider>
+          <AuthKitProvider>{children}</AuthKitProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
