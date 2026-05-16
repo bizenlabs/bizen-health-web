@@ -115,8 +115,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   await throwForStatus(res);
-  // Handle 204 No Content / empty bodies for callers that opt in via `T = void`.
-  if (res.status === 204) return undefined as T;
+  // Handle 202 Accepted / 204 No Content — empty bodies for callers that opt
+  // in via `T = void` (e.g. the async user-management mutations).
+  if (res.status === 202 || res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
