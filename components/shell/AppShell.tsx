@@ -8,10 +8,13 @@ import {
   Dropdown,
   DropdownButton,
   DropdownDivider,
+  DropdownHeading,
   DropdownItem,
   DropdownLabel,
   DropdownMenu,
+  DropdownSection,
 } from "@/components/catalyst/dropdown";
+import { useTheme, type Theme } from "@/components/shell/ThemeProvider";
 import {
   Navbar,
   NavbarItem,
@@ -33,9 +36,13 @@ import { switchOrgAction } from "@/app/select-org/actions";
 import {
   ArrowRightStartOnRectangleIcon,
   ArrowsRightLeftIcon,
+  CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ComputerDesktopIcon,
+  MoonIcon,
   PlusIcon,
+  SunIcon,
   UserCircleIcon,
 } from "@heroicons/react/16/solid";
 import {
@@ -65,11 +72,23 @@ type Props = {
   children: React.ReactNode;
 };
 
+const THEME_OPTIONS: {
+  value: Theme;
+  label: string;
+  icon: typeof SunIcon;
+}[] = [
+  { value: "light", label: "Light", icon: SunIcon },
+  { value: "dark", label: "Dark", icon: MoonIcon },
+  { value: "system", label: "System", icon: ComputerDesktopIcon },
+];
+
 function AccountDropdownMenu({
   anchor,
 }: {
   anchor: "top start" | "bottom end";
 }) {
+  const { theme, setTheme } = useTheme();
+
   return (
     <DropdownMenu className="min-w-64" anchor={anchor}>
       <DropdownItem href="/settings">
@@ -80,6 +99,26 @@ function AccountDropdownMenu({
         <ArrowsRightLeftIcon />
         <DropdownLabel>Switch organization</DropdownLabel>
       </DropdownItem>
+      <DropdownDivider />
+      <DropdownSection>
+        <DropdownHeading>Theme</DropdownHeading>
+        {THEME_OPTIONS.map((option) => (
+          <DropdownItem
+            key={option.value}
+            onClick={() => {
+              setTheme(option.value);
+            }}
+          >
+            <option.icon />
+            <DropdownLabel>{option.label}</DropdownLabel>
+            {theme === option.value ? (
+              <span className="col-start-5 row-start-1 flex justify-self-end">
+                <CheckIcon className="size-4 text-zinc-500 group-data-focus:text-white dark:text-zinc-400" />
+              </span>
+            ) : null}
+          </DropdownItem>
+        ))}
+      </DropdownSection>
       <DropdownDivider />
       <DropdownItem href="/sign-out">
         <ArrowRightStartOnRectangleIcon />
