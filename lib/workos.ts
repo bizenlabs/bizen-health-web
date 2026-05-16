@@ -102,11 +102,16 @@ export async function getApiToken(): Promise<string | null> {
   return info.user ? info.accessToken : null;
 }
 
+// This deployment's own origin, no trailing slash. Local is localhost, each
+// Vercel deployment is its own URL, etc.
+function appOrigin(): string {
+  return process.env.NEXT_PUBLIC_APP_URL!.replace(/\/+$/, "");
+}
+
 // Derive the OAuth redirect URI from this deployment's own origin so we never
 // depend on whichever URI WorkOS happens to mark as "default" in the dashboard.
-// Local hits localhost/callback, Vercel hits its own /callback, etc.
 function callbackUrl(): string {
-  return `${process.env.NEXT_PUBLIC_APP_URL!.replace(/\/+$/, "")}/callback`;
+  return `${appOrigin()}/callback`;
 }
 
 export async function getSignInUrl(opts?: {
@@ -127,7 +132,15 @@ export async function getSignUpUrl(opts?: {
   });
 }
 
-export const signOut = authkitSignOut;
+// AuthKit forwards `returnTo` to WorkOS as the logout `return_to`, which WorkOS
+// requires to be an absolute URL matching a configured logout redirect for the
+// environment. A relative path like "/" is rejected, and WorkOS then falls
+// back to the (often unset) App Homepage URL — which surfaces as the
+// `app-homepage-url-not-found` error page. Default to this deployment's own
+// origin so every environment posts a valid, self-consistent URL.
+export async function signOut(options?: { returnTo?: string }): Promise<void> {
+  return authkitSignOut({ returnTo: options?.returnTo ?? `${appOrigin()}/` });
+}
 
 export const workos = getWorkOS();
 
