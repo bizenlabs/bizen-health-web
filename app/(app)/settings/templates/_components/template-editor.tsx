@@ -177,7 +177,7 @@ function FormattingGuide() {
   return (
     <div className="mt-1 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/40">
       <p className="font-medium text-zinc-500">Formatting</p>
-      <ul className="mt-1.5 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+      <ul className="mt-1.5 grid gap-x-6 gap-y-1.5 sm:grid-cols-4">
         <li className="flex items-baseline gap-2">
           <code className="rounded bg-zinc-100 px-1 font-mono dark:bg-zinc-800">
             ## Heading Section
