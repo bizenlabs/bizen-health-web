@@ -35,13 +35,11 @@ import { SidebarLayout } from "@/components/catalyst/sidebar-layout";
 import { switchOrgAction } from "@/app/select-org/actions";
 import {
   ArrowRightStartOnRectangleIcon,
-  ArrowsRightLeftIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   ComputerDesktopIcon,
   MoonIcon,
-  PlusIcon,
   SunIcon,
   UserCircleIcon,
 } from "@heroicons/react/16/solid";
@@ -95,10 +93,6 @@ function AccountDropdownMenu({
       <DropdownItem href="/settings">
         <UserCircleIcon />
         <DropdownLabel>My account</DropdownLabel>
-      </DropdownItem>
-      <DropdownItem href="/select-org">
-        <ArrowsRightLeftIcon />
-        <DropdownLabel>Switch organization</DropdownLabel>
       </DropdownItem>
       <DropdownDivider />
       <DropdownSection>
@@ -230,11 +224,6 @@ export function AppShell({
                       ))}
                     </>
                   ) : null}
-                  <DropdownDivider />
-                  <DropdownItem href="/select-org">
-                    <PlusIcon />
-                    <DropdownLabel>Manage organizations</DropdownLabel>
-                  </DropdownItem>
                 </DropdownMenu>
               </Dropdown>
             </SidebarHeader>
