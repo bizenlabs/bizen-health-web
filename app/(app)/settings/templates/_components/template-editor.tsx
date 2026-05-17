@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
@@ -153,23 +152,16 @@ export function TemplateEditor({
         ) : null}
 
         <div className="mt-6 flex items-center justify-end gap-x-6">
-          <Link
-            href="/settings/templates"
-            className="text-sm/6 font-semibold text-gray-900 dark:text-white"
-          >
+          <Button href="/settings/templates" plain>
             {isEdit ? "Back to templates" : "Cancel"}
-          </Link>
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50"
-          >
+          </Button>
+          <Button type="submit" disabled={isPending}>
             {isPending
               ? "Saving…"
               : isEdit
                 ? "Save changes"
                 : "Create template"}
-          </button>
+          </Button>
         </div>
       </form>
 
