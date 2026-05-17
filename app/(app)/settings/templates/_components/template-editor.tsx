@@ -1,8 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import { Button } from "@/components/catalyst/button";
+import { ErrorMessage, Field, Label } from "@/components/catalyst/fieldset";
+import { Input } from "@/components/catalyst/input";
+import { Select } from "@/components/catalyst/select";
+import { Textarea } from "@/components/catalyst/textarea";
 import { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
 import type { TemplateDetail, TemplateVersion } from "@/lib/templates";
 import {
@@ -16,21 +21,15 @@ import {
 } from "./template-editor-state";
 import { TemplatePreview } from "./template-preview";
 
-const INPUT =
-  "mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent";
-const LABEL = "block text-xs text-zinc-500";
 const CAPTION = "mb-1 block text-xs font-medium text-zinc-500";
-const PRIMARY =
-  "rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200";
-const SECONDARY =
-  "rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900";
 
 /**
  * Create / edit form for a template — name, description, category and the
  * Markdown body, with the body editor and a live preview shown side by side.
- * In edit mode a version-history panel sits below, each past version
- * restorable in one click. Create submits then redirects into the new
- * template's editor (handled server-side).
+ * Built on the Catalyst form primitives (`Field` / `Label` / `Input` /
+ * `Select` / `Textarea` / `ErrorMessage`), so validation messages render
+ * beneath the field they belong to. In edit mode a version-history panel sits
+ * below; create submits then redirects into the new template's editor.
  */
 export function TemplateEditor({
   template,
@@ -43,10 +42,10 @@ export function TemplateEditor({
   const action = isEdit
     ? updateTemplateAction.bind(null, template.id)
     : createTemplateAction;
-  const [state, formAction] = useActionState<TemplateFormState, FormData>(
-    action,
-    TEMPLATE_FORM_INITIAL,
-  );
+  const [state, formAction, isPending] = useActionState<
+    TemplateFormState,
+    FormData
+  >(action, TEMPLATE_FORM_INITIAL);
 
   // The body is controlled so the live preview can render what's been typed.
   const [content, setContent] = useState(template?.content ?? "");
@@ -54,59 +53,72 @@ export function TemplateEditor({
   return (
     <div className="space-y-8">
       <form action={formAction}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="name" className={LABEL}>
-              Name
-            </label>
-            <input
-              id="name"
+        {state.error ? (
+          <div
+            role="alert"
+            className="mb-6 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+          >
+            <ExclamationTriangleIcon
+              className="mt-0.5 size-5 shrink-0 text-red-600 dark:text-red-400"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-semibold">
+                {isEdit
+                  ? "Couldn’t save your changes"
+                  : "Couldn’t create the template"}
+              </p>
+              <p className="mt-0.5 text-red-800/90 dark:text-red-200/90">
+                {state.error}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid gap-6 sm:grid-cols-2">
+          <Field>
+            <Label>Name</Label>
+            <Input
               name="name"
-              type="text"
-              required
               maxLength={150}
               defaultValue={template?.name ?? ""}
-              className={INPUT}
+              invalid={!!state.fieldErrors.name}
             />
-          </div>
-          <div>
-            <label htmlFor="category" className={LABEL}>
-              Category
-            </label>
-            <select
-              id="category"
+            {state.fieldErrors.name ? (
+              <ErrorMessage>{state.fieldErrors.name}</ErrorMessage>
+            ) : null}
+          </Field>
+
+          <Field>
+            <Label>Category</Label>
+            <Select
               name="category"
               defaultValue={template?.category ?? "SOAP"}
-              className={INPUT}
+              invalid={!!state.fieldErrors.category}
             >
               {TEMPLATE_CATEGORIES.map((category) => (
                 <option key={category} value={category}>
                   {CATEGORY_LABEL[category]}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+            {state.fieldErrors.category ? (
+              <ErrorMessage>{state.fieldErrors.category}</ErrorMessage>
+            ) : null}
+          </Field>
         </div>
 
-        <div className="mt-4">
-          <label htmlFor="description" className={LABEL}>
-            Description
-          </label>
-          <input
-            id="description"
+        <Field className="mt-6">
+          <Label>Description</Label>
+          <Input
             name="description"
-            type="text"
             maxLength={500}
             defaultValue={template?.description ?? ""}
-            className={INPUT}
           />
-        </div>
+        </Field>
 
-        <div className="mt-4">
-          <label htmlFor="content" className={LABEL}>
-            Template body (Markdown)
-          </label>
-
+        <Field className="mt-6">
+          <Label>Template body (Markdown)</Label>
           <FormattingGuide />
 
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -114,13 +126,12 @@ export function TemplateEditor({
               <span className={CAPTION}>Editor</span>
               {/* Controlled so the preview renders live; `name` keeps it part
                   of the form submission. */}
-              <textarea
-                id="content"
+              <Textarea
                 name="content"
                 rows={22}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className={`${INPUT} font-mono`}
+                className="font-mono"
               />
             </div>
             <div>
@@ -128,24 +139,28 @@ export function TemplateEditor({
               <TemplatePreview content={content} />
             </div>
           </div>
-        </div>
+          {state.fieldErrors.content ? (
+            <ErrorMessage>{state.fieldErrors.content}</ErrorMessage>
+          ) : null}
+        </Field>
 
-        {state.error ? (
-          <p className="mt-3 text-xs text-red-600 dark:text-red-400">
-            {state.error}
-          </p>
-        ) : null}
         {isEdit && state.savedAt ? (
-          <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400">
+          <p className="mt-4 text-sm/6 text-emerald-600 dark:text-emerald-400">
             Changes saved.
           </p>
         ) : null}
 
-        <div className="mt-4 flex gap-2">
-          <SubmitButton label={isEdit ? "Save changes" : "Create template"} />
-          <Link href="/settings/templates" className={SECONDARY}>
+        <div className="mt-6 flex items-center gap-3">
+          <Button type="submit" disabled={isPending}>
+            {isPending
+              ? "Saving…"
+              : isEdit
+                ? "Save changes"
+                : "Create template"}
+          </Button>
+          <Button href="/settings/templates" plain>
             {isEdit ? "Back to templates" : "Cancel"}
-          </Link>
+          </Button>
         </div>
       </form>
 
@@ -250,24 +265,11 @@ function VersionHistory({
   );
 }
 
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" disabled={pending} className={PRIMARY}>
-      {pending ? "Saving…" : label}
-    </button>
-  );
-}
-
 function RestoreButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-    >
+    <Button type="submit" outline disabled={pending}>
       {pending ? "…" : "Restore"}
-    </button>
+    </Button>
   );
 }

@@ -23,8 +23,31 @@ function str(formData: FormData, key: string): string {
   return (formData.get(key) ?? "").toString().trim();
 }
 
-function fail(error: string): TemplateFormState {
-  return { error, savedAt: null };
+/** Build a failed-action state — a form-level message and/or per-field errors. */
+function fail(
+  error: string | null,
+  fieldErrors: Record<string, string> = {},
+): TemplateFormState {
+  return { error, fieldErrors, savedAt: null };
+}
+
+/**
+ * Turn an API failure into form state: a duplicate name and bean-validation
+ * field errors land on the offending field; anything else is form-level.
+ */
+function fromApiError(err: unknown, fallback: string): TemplateFormState {
+  if (err instanceof ApiError) {
+    if (err.code === "TEMPLATE_NAME_TAKEN") {
+      return fail(null, { name: err.message });
+    }
+    if (err.fields.length > 0) {
+      const fieldErrors: Record<string, string> = {};
+      for (const f of err.fields) fieldErrors[f.path] = f.message;
+      return fail(null, fieldErrors);
+    }
+    return fail(err.message);
+  }
+  return fail(fallback);
 }
 
 /** Read the editable fields off a submitted form, validating as we go. */
@@ -36,7 +59,7 @@ function readInput(formData: FormData):
       category: TemplateCategory;
       content: string;
     }
-  | { ok: false; error: string } {
+  | { ok: false; state: TemplateFormState } {
   const name = str(formData, "name");
   const description = str(formData, "description");
   const category = str(formData, "category");
@@ -46,9 +69,17 @@ function readInput(formData: FormData):
     .toString()
     .replace(/\r\n?/g, "\n");
 
-  if (!name) return { ok: false, error: "Enter a name for the template." };
+  if (!name) {
+    return {
+      ok: false,
+      state: fail(null, { name: "Enter a name for the template." }),
+    };
+  }
   if (!TEMPLATE_CATEGORIES.includes(category as TemplateCategory)) {
-    return { ok: false, error: "Choose a category for the template." };
+    return {
+      ok: false,
+      state: fail(null, { category: "Choose a category for the template." }),
+    };
   }
   return {
     ok: true,
@@ -66,7 +97,7 @@ export async function createTemplateAction(
   await requireRole("tenant_admin", "super_admin");
 
   const input = readInput(formData);
-  if (!input.ok) return fail(input.error);
+  if (!input.ok) return input.state;
 
   let id: string;
   try {
@@ -78,8 +109,7 @@ export async function createTemplateAction(
     });
     id = created.id;
   } catch (err) {
-    if (err instanceof ApiError) return fail(err.message);
-    return fail("Could not create the template.");
+    return fromApiError(err, "Could not create the template.");
   }
 
   revalidatePath(LIST_PATH);
@@ -94,7 +124,7 @@ export async function updateTemplateAction(
   await requireRole("tenant_admin", "super_admin");
 
   const input = readInput(formData);
-  if (!input.ok) return fail(input.error);
+  if (!input.ok) return input.state;
 
   try {
     await updateTemplate(id, {
@@ -104,13 +134,12 @@ export async function updateTemplateAction(
       content: input.content,
     });
   } catch (err) {
-    if (err instanceof ApiError) return fail(err.message);
-    return fail("Could not save your changes.");
+    return fromApiError(err, "Could not save your changes.");
   }
 
   revalidatePath(LIST_PATH);
   revalidatePath(`${LIST_PATH}/${id}`);
-  return { error: null, savedAt: Date.now() };
+  return { error: null, fieldErrors: {}, savedAt: Date.now() };
 }
 
 export async function retireTemplateAction(id: string): Promise<void> {
