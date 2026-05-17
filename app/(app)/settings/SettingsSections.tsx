@@ -11,6 +11,12 @@ const SECTIONS = [
       "Visit types and other lookup lists your clinic files against.",
   },
   {
+    href: "/settings/templates",
+    title: "Note templates",
+    description:
+      "Markdown scaffolds for clinical notes — SOAP, progress, discharge and more.",
+  },
+  {
     href: "/settings/scheduling",
     title: "Scheduling",
     description:
