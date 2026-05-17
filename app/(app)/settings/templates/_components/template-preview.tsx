@@ -86,7 +86,7 @@ function PreviewLine({ line }: { line: string }) {
 
 export function TemplatePreview({ content }: { content: string }) {
   return (
-    <div className="mt-1 min-h-[33rem] w-full overflow-auto rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
+    <div className="mt-1 h-[34rem] w-full overflow-auto rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
       {content.trim() === "" ? (
         <p className="text-zinc-400 dark:text-zinc-500">
           Nothing to preview yet — type a template body to see it here.

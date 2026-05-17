@@ -125,13 +125,14 @@ export function TemplateEditor({
             <div>
               <span className={CAPTION}>Editor</span>
               {/* Controlled so the preview renders live; `name` keeps it part
-                  of the form submission. */}
+                  of the form submission. Fixed height to match the preview
+                  pane — the Catalyst textarea fills its wrapper. */}
               <Textarea
                 name="content"
-                rows={22}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="font-mono"
+                resizable={false}
+                className="h-[34rem] font-mono"
               />
             </div>
             <div>
