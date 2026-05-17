@@ -49,6 +49,7 @@ import {
   CalendarDaysIcon,
   Cog6ToothIcon,
   HomeIcon,
+  MicrophoneIcon,
   UserGroupIcon,
   UsersIcon,
 } from "@heroicons/react/20/solid";
@@ -260,6 +261,13 @@ export function AppShell({
                 >
                   <CalendarDaysIcon />
                   <SidebarLabel>Appointments</SidebarLabel>
+                </SidebarItem>
+                <SidebarItem
+                  href="/dictation"
+                  current={pathname.startsWith("/dictation")}
+                >
+                  <MicrophoneIcon />
+                  <SidebarLabel>Dictation</SidebarLabel>
                 </SidebarItem>
                 <SidebarItem
                   href="/settings"
