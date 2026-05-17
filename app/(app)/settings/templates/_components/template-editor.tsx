@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
 import type { TemplateDetail, TemplateVersion } from "@/lib/templates";
@@ -14,6 +14,7 @@ import {
   TEMPLATE_FORM_INITIAL,
   type TemplateFormState,
 } from "./template-editor-state";
+import { TemplatePreview } from "./template-preview";
 
 const INPUT =
   "mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent";
@@ -44,6 +45,10 @@ export function TemplateEditor({
     action,
     TEMPLATE_FORM_INITIAL,
   );
+
+  // The body is controlled so the live preview can render what's been typed.
+  const [content, setContent] = useState(template?.content ?? "");
+  const [bodyMode, setBodyMode] = useState<"write" | "preview">("write");
 
   return (
     <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
@@ -97,16 +102,38 @@ export function TemplateEditor({
         </div>
 
         <div className="mt-4">
-          <label htmlFor="content" className={LABEL}>
-            Template body (Markdown)
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="content" className={LABEL}>
+              Template body (Markdown)
+            </label>
+            <div className="flex gap-0.5 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800">
+              <BodyModeTab
+                label="Write"
+                active={bodyMode === "write"}
+                onClick={() => setBodyMode("write")}
+              />
+              <BodyModeTab
+                label="Preview"
+                active={bodyMode === "preview"}
+                onClick={() => setBodyMode("preview")}
+              />
+            </div>
+          </div>
+          {/* The textarea stays mounted (just hidden) in preview mode so it
+              still carries the `content` field when the form is submitted. */}
           <textarea
             id="content"
             name="content"
             rows={22}
-            defaultValue={template?.content ?? ""}
-            className={`${INPUT} font-mono`}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className={`${INPUT} font-mono ${
+              bodyMode === "preview" ? "hidden" : ""
+            }`}
           />
+          {bodyMode === "preview" ? (
+            <TemplatePreview content={content} />
+          ) : null}
           <p className="mt-1 text-xs text-zinc-500">
             Markdown. Use{" "}
             <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
@@ -200,6 +227,31 @@ function VersionHistory({
         </ul>
       )}
     </aside>
+  );
+}
+
+function BodyModeTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "rounded px-2 py-0.5 text-xs font-medium " +
+        (active
+          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+          : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200")
+      }
+    >
+      {label}
+    </button>
   );
 }
 
