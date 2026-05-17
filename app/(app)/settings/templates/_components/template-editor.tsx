@@ -75,7 +75,7 @@ export function TemplateEditor({
           </div>
         ) : null}
 
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid gap-6 sm:grid-cols-3">
           <Field>
             <Label>Name</Label>
             <Input
@@ -106,16 +106,16 @@ export function TemplateEditor({
               <ErrorMessage>{state.fieldErrors.category}</ErrorMessage>
             ) : null}
           </Field>
-        </div>
 
-        <Field className="mt-6">
-          <Label>Description</Label>
-          <Input
-            name="description"
-            maxLength={500}
-            defaultValue={template?.description ?? ""}
-          />
-        </Field>
+          <Field>
+            <Label>Description</Label>
+            <Input
+              name="description"
+              maxLength={500}
+              defaultValue={template?.description ?? ""}
+            />
+          </Field>
+        </div>
 
         <Field className="mt-6">
           <Label>Template body (Markdown)</Label>
