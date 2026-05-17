@@ -1,5 +1,6 @@
 import "server-only";
 import { api } from "@/lib/api";
+import type { TemplateCategory } from "@/lib/template-categories";
 
 /**
  * Clinical note templates — tenant-scoped, versioned Markdown scaffolds a
@@ -8,34 +9,14 @@ import { api } from "@/lib/api";
  * row. Templates are retired, never deleted, so anything already referencing
  * one keeps resolving.
  *
- * Server-only BFF wrappers over the Spring `/v1/templates` surface.
+ * Server-only BFF wrappers over the Spring `/v1/templates` surface. The
+ * category constants live in `lib/template-categories.ts` (no `server-only`)
+ * so Client Components can use them; they are re-exported here for the
+ * convenience of server callers.
  */
 
-/** The note-type buckets a template can belong to — mirrors the API enum. */
-export const TEMPLATE_CATEGORIES = [
-  "SOAP",
-  "HISTORY_AND_PHYSICAL",
-  "PROGRESS",
-  "PROCEDURE",
-  "DISCHARGE",
-  "REFERRAL",
-  "DICTATION",
-  "OTHER",
-] as const;
-
-export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
-
-/** Human label for a category — for headings, selects and chips. */
-export const CATEGORY_LABEL: Record<TemplateCategory, string> = {
-  SOAP: "SOAP note",
-  HISTORY_AND_PHYSICAL: "History & physical",
-  PROGRESS: "Progress note",
-  PROCEDURE: "Procedure note",
-  DISCHARGE: "Discharge summary",
-  REFERRAL: "Referral letter",
-  DICTATION: "Dictation",
-  OTHER: "Other",
-};
+export { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
+export type { TemplateCategory } from "@/lib/template-categories";
 
 /** List-row shape — no `content`, to keep the list payload small. */
 export type TemplateSummary = {

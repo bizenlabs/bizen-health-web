@@ -3,12 +3,8 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import {
-  CATEGORY_LABEL,
-  TEMPLATE_CATEGORIES,
-  type TemplateDetail,
-  type TemplateVersion,
-} from "@/lib/templates";
+import { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
+import type { TemplateDetail, TemplateVersion } from "@/lib/templates";
 import {
   createTemplateAction,
   restoreTemplateVersionAction,
