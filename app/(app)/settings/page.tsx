@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { workos } from "@/lib/workos";
 import { GeneralSection } from "./GeneralSection";
+import { SettingsSections } from "./SettingsSections";
 
 export default async function Settings() {
   const session = await requireSession();
@@ -27,6 +28,8 @@ export default async function Settings() {
         orgType={session.orgType}
         isAdmin={isAdmin}
       />
+
+      {isAdmin ? <SettingsSections /> : null}
     </div>
   );
 }
