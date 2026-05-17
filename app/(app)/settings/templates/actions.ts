@@ -40,7 +40,11 @@ function readInput(formData: FormData):
   const name = str(formData, "name");
   const description = str(formData, "description");
   const category = str(formData, "category");
-  const content = (formData.get("content") ?? "").toString();
+  // Browsers submit <textarea> values with CRLF line endings; normalise to
+  // plain \n so the stored Markdown body stays consistent.
+  const content = (formData.get("content") ?? "")
+    .toString()
+    .replace(/\r\n?/g, "\n");
 
   if (!name) return { ok: false, error: "Enter a name for the template." };
   if (!TEMPLATE_CATEGORIES.includes(category as TemplateCategory)) {

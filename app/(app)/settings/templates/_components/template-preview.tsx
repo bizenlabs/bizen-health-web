@@ -93,9 +93,14 @@ export function TemplatePreview({ content }: { content: string }) {
         </p>
       ) : (
         <div className="space-y-1">
-          {content.split("\n").map((line, i) => (
-            <PreviewLine key={i} line={line} />
-          ))}
+          {/* Normalise CRLF/CR — browsers submit <textarea> values with \r\n,
+              and a stray \r breaks the `$` anchor in the line patterns. */}
+          {content
+            .replace(/\r\n?/g, "\n")
+            .split("\n")
+            .map((line, i) => (
+              <PreviewLine key={i} line={line} />
+            ))}
         </div>
       )}
     </div>
