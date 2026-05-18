@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* `prose` classes for rich-text surfaces (the dictation editor). */
+@plugin "@tailwindcss/typography";
+
 /* Drive `dark:` off a `.dark` class on <html> instead of the OS media query,
    so the user can override the OS via the theme switcher. The before-paint
    script in app/layout.tsx is what adds/removes `.dark` (including resolving

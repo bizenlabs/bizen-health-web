@@ -40,7 +40,7 @@ export interface UseTranscriptionResult {
   partial: { text: string; speakerIndex: number | null } | null;
   start: (
     input: StartTranscriptionInput,
-    opts?: { deviceId?: string | null },
+    opts?: { deviceId?: string | null; existingId?: string },
   ) => Promise<void>;
   stop: () => Promise<TranscriptionDetail | null>;
 }
@@ -154,7 +154,7 @@ export function useTranscription(): UseTranscriptionResult {
   const start = useCallback(
     async (
       input: StartTranscriptionInput,
-      opts?: { deviceId?: string | null },
+      opts?: { deviceId?: string | null; existingId?: string },
     ) => {
       setError(null);
       setState("starting");
@@ -165,10 +165,18 @@ export function useTranscription(): UseTranscriptionResult {
       idRef.current = null;
       setTranscriptionId(null);
       try {
-        const created = await startTranscriptionAction(input);
-        if (!created.ok) throw new Error(created.error);
-        idRef.current = created.data.id;
-        setTranscriptionId(created.data.id);
+        // When the session was already created (the unified editor flow mints
+        // it at intake so it has an id to navigate to), skip the create and
+        // just stream audio into it.
+        if (opts?.existingId) {
+          idRef.current = opts.existingId;
+          setTranscriptionId(opts.existingId);
+        } else {
+          const created = await startTranscriptionAction(input);
+          if (!created.ok) throw new Error(created.error);
+          idRef.current = created.data.id;
+          setTranscriptionId(created.data.id);
+        }
         startedAtRef.current = Date.now();
 
         const stream = createDeepgramStream({
