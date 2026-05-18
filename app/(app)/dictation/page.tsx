@@ -1,22 +1,33 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth";
+import { listTemplates, type TemplateSummary } from "@/lib/templates";
 import { listMyDictations } from "@/lib/transcriptions";
-import { DictationRecorder } from "./_components/dictation-recorder";
+import { DictationSession } from "./_components/dictation-session";
 
 export default async function DictationPage() {
   await requireSession();
   const { content: dictations } = await listMyDictations();
 
+  // Templates feed the intake step's picker. They are a convenience, not a
+  // prerequisite — free-form dictation works regardless — so a failed fetch
+  // degrades to an empty picker rather than failing the page.
+  let templates: TemplateSummary[] = [];
+  try {
+    templates = await listTemplates();
+  } catch {
+    templates = [];
+  }
+
   return (
     <div className="px-6 py-10">
       <h1 className="text-2xl font-semibold">Dictation</h1>
       <p className="mt-1 text-sm text-zinc-500">
-        Dictate a clinical note hands-free. Audio streams to Deepgram and is not
-        stored — only the transcript.
+        Dictate a clinical note hands-free. Audio is not stored — only the
+        transcript.
       </p>
 
       <div className="mt-6 max-w-2xl">
-        <DictationRecorder />
+        <DictationSession templates={templates} />
       </div>
 
       <section className="mt-10 max-w-2xl">

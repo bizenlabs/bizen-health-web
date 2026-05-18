@@ -38,7 +38,10 @@ export interface UseTranscriptionResult {
   transcriptionId: string | null;
   segments: LiveSegment[];
   partial: { text: string; speakerIndex: number | null } | null;
-  start: (input: StartTranscriptionInput) => Promise<void>;
+  start: (
+    input: StartTranscriptionInput,
+    opts?: { deviceId?: string | null },
+  ) => Promise<void>;
   stop: () => Promise<TranscriptionDetail | null>;
 }
 
@@ -149,7 +152,10 @@ export function useTranscription(): UseTranscriptionResult {
   }, [clearFlushTimer]);
 
   const start = useCallback(
-    async (input: StartTranscriptionInput) => {
+    async (
+      input: StartTranscriptionInput,
+      opts?: { deviceId?: string | null },
+    ) => {
       setError(null);
       setState("starting");
       setSegments([]);
@@ -174,7 +180,7 @@ export function useTranscription(): UseTranscriptionResult {
         // Start the mic before the WS handshake — sendPcm() buffers frames
         // until the socket opens, so the first words survive token fetch +
         // connect.
-        const capture = createAudioCapture();
+        const capture = createAudioCapture(opts?.deviceId ?? undefined);
         captureRef.current = capture;
         await capture.start((chunk) => stream.sendPcm(chunk));
 
