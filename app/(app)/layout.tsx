@@ -31,7 +31,6 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     <AppShell
       currentOrgId={session.organizationId}
       currentOrgName={currentOrgName}
-      currentOrgSlug={session.tenantSlug}
       memberships={memberships.map((m) => ({
         organizationId: m.organizationId,
         organizationName: m.organizationName,

@@ -61,7 +61,6 @@ type Membership = {
 type Props = {
   currentOrgId: string;
   currentOrgName: string;
-  currentOrgSlug: string | null;
   memberships: Membership[];
   isTenantAdmin: boolean;
   user: {
@@ -132,7 +131,6 @@ function AccountDropdownMenu({
 export function AppShell({
   currentOrgId,
   currentOrgName,
-  currentOrgSlug,
   memberships,
   isTenantAdmin,
   user,
@@ -193,13 +191,6 @@ export function AppShell({
                     <Cog6ToothIcon />
                     <DropdownLabel>Settings</DropdownLabel>
                   </DropdownItem>
-                  {currentOrgSlug ? (
-                    <DropdownItem disabled>
-                      <DropdownLabel className="text-xs text-zinc-500">
-                        {currentOrgSlug}
-                      </DropdownLabel>
-                    </DropdownItem>
-                  ) : null}
                   {otherOrgs.length > 0 ? (
                     <>
                       <DropdownDivider />
