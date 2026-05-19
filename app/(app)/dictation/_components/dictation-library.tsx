@@ -16,6 +16,7 @@ import type {
   TranscriptionStatus,
   TranscriptionSummary,
 } from "@/lib/transcriptions";
+import { DictationRowDelete } from "./dictation-row-delete";
 
 // The dictation library — the home of the dictation area. A grouped,
 // searchable, status-aware list of past dictations; "New dictation" routes to
@@ -302,33 +303,46 @@ function DictationRow({
   when: string;
 }) {
   const TemplateGlyph = d.templateId ? DocumentTextIcon : PencilSquareIcon;
+  // A live recording can't be voided — the session must be stopped first.
+  const canDelete = !(d.status === "IN_PROGRESS" && !d.voided);
 
   return (
-    <Link
-      href={`/dictation/${d.id}`}
-      className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3.5 py-3 transition-all hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-zinc-600"
-    >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
-        <TemplateGlyph className="size-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span
-          className={clsx(
-            "block truncate text-sm font-medium",
-            d.voided
-              ? "text-zinc-400 line-through decoration-zinc-300 dark:text-zinc-500"
-              : "text-zinc-900 dark:text-zinc-100",
-          )}
-        >
-          {label}
+    <div className="group flex items-center rounded-xl border border-zinc-200 bg-white transition-all hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-zinc-600">
+      <Link
+        href={`/dictation/${d.id}`}
+        className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3.5"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+          <TemplateGlyph className="size-4" />
         </span>
-        <span className="mt-0.5 block font-mono text-[11px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500">
-          {when}
+        <span className="min-w-0 flex-1">
+          <span
+            className={clsx(
+              "block truncate text-sm font-medium",
+              d.voided
+                ? "text-zinc-400 line-through decoration-zinc-300 dark:text-zinc-500"
+                : "text-zinc-900 dark:text-zinc-100",
+            )}
+          >
+            {label}
+          </span>
+          <span className="mt-0.5 block font-mono text-[11px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500">
+            {when}
+          </span>
         </span>
-      </span>
-      <StatusBadge dictation={d} />
-      <ChevronRightIcon className="size-4 shrink-0 text-zinc-300 transition-all group-hover:translate-x-0.5 group-hover:text-zinc-500 dark:text-zinc-600 dark:group-hover:text-zinc-400" />
-    </Link>
+        <StatusBadge dictation={d} />
+      </Link>
+      <div className="flex items-center gap-0.5 py-3 pr-2.5 pl-1.5">
+        {canDelete ? (
+          <DictationRowDelete
+            transcriptionId={d.id}
+            voided={d.voided}
+            label={label}
+          />
+        ) : null}
+        <ChevronRightIcon className="size-4 shrink-0 text-zinc-300 transition-all group-hover:translate-x-0.5 group-hover:text-zinc-500 dark:text-zinc-600 dark:group-hover:text-zinc-400" />
+      </div>
+    </div>
   );
 }
 

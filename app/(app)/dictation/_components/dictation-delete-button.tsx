@@ -4,6 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUturnLeftIcon, TrashIcon } from "@heroicons/react/20/solid";
 import {
+  Alert,
+  AlertActions,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/catalyst/alert";
+import { Button } from "@/components/catalyst/button";
+import {
   restoreTranscriptionAction,
   voidTranscriptionAction,
 } from "@/app/(app)/transcription-actions";
@@ -23,18 +30,13 @@ export function DictationDeleteButton({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  function handleDelete() {
-    if (
-      !confirm(
-        "Delete this dictation? It will be hidden from your library, but can be restored.",
-      )
-    ) {
-      return;
-    }
+  function confirmDelete() {
     setError(null);
     startTransition(async () => {
       const res = await voidTranscriptionAction(transcriptionId);
+      setConfirming(false);
       if (res.ok) router.refresh();
       else setError(res.error);
     });
@@ -64,17 +66,32 @@ export function DictationDeleteButton({
       ) : (
         <button
           type="button"
-          onClick={handleDelete}
+          onClick={() => setConfirming(true)}
           disabled={pending}
           className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
         >
           <TrashIcon aria-hidden="true" className="size-4" />
-          {pending ? "Deleting…" : "Delete"}
+          Delete
         </button>
       )}
       {error ? (
         <span className="text-xs text-red-600 dark:text-red-400">{error}</span>
       ) : null}
+
+      <Alert open={confirming} onClose={() => setConfirming(false)} size="sm">
+        <AlertTitle>Delete this dictation?</AlertTitle>
+        <AlertDescription>
+          This dictation will be removed from your library.
+        </AlertDescription>
+        <AlertActions>
+          <Button plain onClick={() => setConfirming(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button color="red" onClick={confirmDelete} disabled={pending}>
+            {pending ? "Deleting…" : "Delete"}
+          </Button>
+        </AlertActions>
+      </Alert>
     </div>
   );
 }
