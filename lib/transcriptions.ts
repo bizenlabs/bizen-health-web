@@ -29,6 +29,8 @@ export type TranscriptionDetail = {
   encounterId: string | null;
   patientId: string | null;
   templateId: string | null;
+  // User-given name; null falls back to a derived label.
+  title: string | null;
   status: TranscriptionStatus;
   language: string;
   deepgramRequestId: string | null;
@@ -50,6 +52,7 @@ export type TranscriptionSummary = {
   encounterId: string | null;
   patientId: string | null;
   templateId: string | null;
+  title: string | null;
   status: TranscriptionStatus;
   language: string;
   startedAt: string;
@@ -132,6 +135,14 @@ export const editTranscriptionNote = (
   api<TranscriptionDetail>(`/v1/transcriptions/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+
+// Set or clear the user-given name for a dictation — null/blank clears it,
+// returning the display label to its derived default.
+export const renameTranscription = (id: string, title: string | null) =>
+  api<TranscriptionDetail>(`/v1/transcriptions/${id}/title`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
   });
 
 export const labelSpeaker = (id: string, speakerIndex: number, label: string) =>

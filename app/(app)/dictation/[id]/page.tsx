@@ -7,6 +7,7 @@ import { getTemplate } from "@/lib/templates";
 import { getTranscription } from "@/lib/transcriptions";
 import { DictationDeleteButton } from "../_components/dictation-delete-button";
 import { DictationEditor } from "../_components/dictation-editor";
+import { DictationTitle } from "../_components/dictation-title";
 
 // The unified dictation surface. Reached from the library, or with a `record`
 // query param to begin recording immediately — from intake (a new session) or
@@ -68,9 +69,12 @@ export default async function DictationDetailPage({
             <ChevronLeftIcon className="size-3.5" />
             Dictation
           </Link>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
-            Dictation
-          </h1>
+          <DictationTitle
+            transcriptionId={dictation.id}
+            title={dictation.title}
+            fallbackLabel={templateName ?? "Free-form dictation"}
+            editable={!dictation.voided}
+          />
           <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
             {new Date(dictation.startedAt).toLocaleString()}
           </p>

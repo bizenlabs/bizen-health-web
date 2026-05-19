@@ -76,6 +76,7 @@ function rowLabel(
   d: TranscriptionSummary,
   names: Record<string, string>,
 ): string {
+  if (d.title) return d.title;
   if (!d.templateId) return "Free-form dictation";
   return names[d.templateId] ?? "Template-based dictation";
 }

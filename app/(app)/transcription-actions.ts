@@ -11,6 +11,7 @@ import {
   failTranscription,
   labelSpeaker,
   mintDeepgramKey,
+  renameTranscription,
   reopenTranscription,
   type SegmentInput,
   startTranscription,
@@ -174,6 +175,19 @@ export async function reopenTranscriptionAction(
   const result = await run(
     () => reopenTranscription(transcriptionId),
     "Failed to resume the dictation.",
+  );
+  if (result.ok) revalidateFor(result.data);
+  return result;
+}
+
+export async function renameTranscriptionAction(
+  transcriptionId: string,
+  title: string | null,
+): Promise<ActionResult<TranscriptionDetail>> {
+  await requireSession();
+  const result = await run(
+    () => renameTranscription(transcriptionId, title),
+    "Failed to rename the dictation.",
   );
   if (result.ok) revalidateFor(result.data);
   return result;
