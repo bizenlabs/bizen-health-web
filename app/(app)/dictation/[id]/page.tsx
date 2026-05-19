@@ -8,9 +8,10 @@ import { getTranscription } from "@/lib/transcriptions";
 import { DictationDeleteButton } from "../_components/dictation-delete-button";
 import { DictationEditor } from "../_components/dictation-editor";
 
-// The unified dictation surface. Reached from the library, or from intake with
-// ?record=1 to begin recording immediately. The DictationEditor handles both
-// the live and editable states; this page just fetches and frames.
+// The unified dictation surface. Reached from the library, or with a `record`
+// query param to begin recording immediately — from intake (a new session) or
+// from Resume (a later sitting of an existing one). The DictationEditor handles
+// both the live and editable states; this page just fetches and frames.
 export default async function DictationDetailPage({
   params,
   searchParams,
@@ -28,10 +29,23 @@ export default async function DictationDetailPage({
   }
 
   const transcriptText = dictation.segments.map((s) => s.text).join(" ");
+
+  // Any truthy `record` value opens straight into recording: intake passes
+  // `1`, Resume passes a timestamp (so a repeat resume still differs). It
+  // doubles as the editor key, remounting it fresh for each recording sitting.
+  const recordParam = typeof sp?.record === "string" ? sp.record : null;
   const autoRecord =
-    sp?.record === "1" &&
-    dictation.status === "IN_PROGRESS" &&
-    !dictation.voided;
+    !!recordParam && dictation.status === "IN_PROGRESS" && !dictation.voided;
+
+  // Structured segments handed to the editor so a resumed recording appends
+  // to the existing transcript instead of starting blank.
+  const initialSegments = dictation.segments.map((s) => ({
+    sequence: s.sequence,
+    speakerIndex: s.speakerIndex,
+    text: s.text,
+    startOffsetMs: s.startOffsetMs,
+    endOffsetMs: s.endOffsetMs,
+  }));
 
   // Resolve the template name for the editor's format chip.
   let templateName: string | null = null;
@@ -74,11 +88,13 @@ export default async function DictationDetailPage({
       {/* The editor fills the remaining height. */}
       <div className="mt-6 flex min-h-0 flex-1 flex-col">
         <DictationEditor
+          key={recordParam ?? "editing"}
           transcriptionId={dictation.id}
           templateId={dictation.templateId}
           templateName={templateName}
           initialNote={dictation.noteContent}
           transcriptText={transcriptText}
+          initialSegments={initialSegments}
           voided={dictation.voided}
           autoRecord={autoRecord}
         />

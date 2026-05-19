@@ -11,6 +11,7 @@ import {
   failTranscription,
   labelSpeaker,
   mintDeepgramKey,
+  reopenTranscription,
   type SegmentInput,
   startTranscription,
   type StartTranscriptionInput,
@@ -164,4 +165,16 @@ export async function restoreTranscriptionAction(
   );
   if (result.ok) revalidateFor(result.data);
   return result.ok ? { ok: true, data: undefined } : result;
+}
+
+export async function reopenTranscriptionAction(
+  transcriptionId: string,
+): Promise<ActionResult<TranscriptionDetail>> {
+  await requireSession();
+  const result = await run(
+    () => reopenTranscription(transcriptionId),
+    "Failed to resume the dictation.",
+  );
+  if (result.ok) revalidateFor(result.data);
+  return result;
 }

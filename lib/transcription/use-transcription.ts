@@ -40,7 +40,14 @@ export interface UseTranscriptionResult {
   partial: { text: string; speakerIndex: number | null } | null;
   start: (
     input: StartTranscriptionInput,
-    opts?: { deviceId?: string | null; existingId?: string },
+    opts?: {
+      deviceId?: string | null;
+      existingId?: string;
+      // Finalised segments already persisted on the session — supplied when
+      // resuming a dictation so the live view shows them and new segments are
+      // numbered after, not over, them.
+      seedSegments?: LiveSegment[];
+    },
   ) => Promise<void>;
   stop: () => Promise<TranscriptionDetail | null>;
 }
@@ -59,6 +66,9 @@ export function useTranscription(): UseTranscriptionResult {
   const streamRef = useRef<TranscriptionStream | null>(null);
   const captureRef = useRef<AudioCapture | null>(null);
   const idRef = useRef<string | null>(null);
+  // True between session creation and an explicit stop()/failure. The unmount
+  // cleanup uses it to finalise a session abandoned by a client-side nav.
+  const liveRef = useRef<boolean>(false);
   const startedAtRef = useRef<number>(0);
   const seqRef = useRef<number>(0);
   const pendingRef = useRef<LiveSegment[]>([]);
@@ -154,14 +164,24 @@ export function useTranscription(): UseTranscriptionResult {
   const start = useCallback(
     async (
       input: StartTranscriptionInput,
-      opts?: { deviceId?: string | null; existingId?: string },
+      opts?: {
+        deviceId?: string | null;
+        existingId?: string;
+        seedSegments?: LiveSegment[];
+      },
     ) => {
+      const seed = opts?.seedSegments ?? [];
       setError(null);
       setState("starting");
-      setSegments([]);
+      setSegments(seed);
       setPartial(null);
       pendingRef.current = [];
-      seqRef.current = 0;
+      // Continue numbering after the seeded segments so a resumed recording
+      // appends to the dictation rather than colliding with existing rows.
+      seqRef.current = seed.reduce(
+        (max, s) => Math.max(max, s.sequence + 1),
+        0,
+      );
       idRef.current = null;
       setTranscriptionId(null);
       try {
@@ -177,6 +197,7 @@ export function useTranscription(): UseTranscriptionResult {
           idRef.current = created.data.id;
           setTranscriptionId(created.data.id);
         }
+        liveRef.current = true;
         startedAtRef.current = Date.now();
 
         const stream = createDeepgramStream({
@@ -203,6 +224,7 @@ export function useTranscription(): UseTranscriptionResult {
         });
         setState("recording");
       } catch (err) {
+        liveRef.current = false;
         setError(err instanceof Error ? err.message : String(err));
         setState("error");
         await teardown();
@@ -214,6 +236,7 @@ export function useTranscription(): UseTranscriptionResult {
   );
 
   const stop = useCallback(async (): Promise<TranscriptionDetail | null> => {
+    liveRef.current = false;
     setState("stopping");
     await teardown();
     await flush();
@@ -235,12 +258,31 @@ export function useTranscription(): UseTranscriptionResult {
   }, [flush, teardown]);
 
   // Tear down capture + socket if the component unmounts mid-recording.
+  // A client-side navigation away never calls stop(), so without this the
+  // backend session would be stranded IN_PROGRESS forever. Implicitly finalise
+  // it — flush whatever was buffered, then complete — so it lands as a normal
+  // dictation. (A full page unload is handled separately by a beforeunload
+  // warning; sendBeacon-style finalisation there is out of scope.)
   useEffect(() => {
     return () => {
       void captureRef.current?.stop();
       void streamRef.current?.close();
+      clearFlushTimer();
+      const id = idRef.current;
+      if (!id || !liveRef.current) return;
+      liveRef.current = false;
+      const buffered = pendingRef.current;
+      pendingRef.current = [];
+      void (async () => {
+        if (buffered.length > 0) {
+          await appendSegmentsAction(id, buffered).catch(() => {});
+        }
+        await completeTranscriptionAction(id, {
+          endedAt: new Date().toISOString(),
+        }).catch(() => {});
+      })();
     };
-  }, []);
+  }, [clearFlushTimer]);
 
   return { state, error, transcriptionId, segments, partial, start, stop };
 }

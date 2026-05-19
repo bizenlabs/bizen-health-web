@@ -167,3 +167,10 @@ export const restoreTranscription = (id: string) =>
   api<TranscriptionDetail>(`/v1/transcriptions/${id}/restore`, {
     method: "POST",
   });
+
+// Returns a finalised dictation to IN_PROGRESS so recording can resume — a
+// dictation may be captured across several sittings. DICTATION mode only.
+export const reopenTranscription = (id: string) =>
+  api<TranscriptionDetail>(`/v1/transcriptions/${id}/reopen`, {
+    method: "POST",
+  });

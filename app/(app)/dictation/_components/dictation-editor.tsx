@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
   DocumentTextIcon,
+  MicrophoneIcon,
   PencilSquareIcon,
   StopIcon,
 } from "@heroicons/react/20/solid";
@@ -19,8 +21,14 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
 import { EditorState } from "@tiptap/pm/state";
-import { editTranscriptionNoteAction } from "@/app/(app)/transcription-actions";
-import { useTranscription } from "@/lib/transcription/use-transcription";
+import {
+  editTranscriptionNoteAction,
+  reopenTranscriptionAction,
+} from "@/app/(app)/transcription-actions";
+import {
+  type LiveSegment,
+  useTranscription,
+} from "@/lib/transcription/use-transcription";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
 // While the mic is live it is read-only and the transcript streams in (the
@@ -82,6 +90,7 @@ export function DictationEditor({
   templateName,
   initialNote,
   transcriptText,
+  initialSegments,
   voided,
   autoRecord,
 }: {
@@ -90,13 +99,19 @@ export function DictationEditor({
   templateName: string | null;
   initialNote: string | null;
   transcriptText: string;
+  // Finalised segments already on the session — seeded into a resumed
+  // recording so it appends to the existing transcript.
+  initialSegments: LiveSegment[];
   voided: boolean;
   autoRecord: boolean;
 }) {
+  const router = useRouter();
   const { state, error, segments, partial, start, stop } = useTranscription();
 
   const [stopped, setStopped] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   // `phase` is derived, not stored — it has no transition the user can't
   // express as "voided / recording done / still recording".
@@ -193,9 +208,9 @@ export function DictationEditor({
     }
     void start(
       { mode: "DICTATION", templateId },
-      { existingId: transcriptionId, deviceId },
+      { existingId: transcriptionId, deviceId, seedSegments: initialSegments },
     );
-  }, [phase, start, templateId, transcriptionId]);
+  }, [phase, start, templateId, transcriptionId, initialSegments]);
 
   // Seed the editor for a dictation opened straight into the editable state.
   useEffect(() => {
@@ -258,6 +273,21 @@ export function DictationEditor({
     setStopped(true);
   }
 
+  // Resume a finalised dictation. Reopen it server-side, then navigate with a
+  // fresh `record` value — the page keys the editor on it, so this remounts
+  // straight into a new recording session that appends to the transcript.
+  async function handleResume() {
+    setResuming(true);
+    setResumeError(null);
+    const res = await reopenTranscriptionAction(transcriptionId);
+    if (res.ok) {
+      router.push(`/dictation/${transcriptionId}?record=${Date.now()}`);
+    } else {
+      setResumeError(res.error);
+      setResuming(false);
+    }
+  }
+
   const TemplateGlyph = templateName ? DocumentTextIcon : PencilSquareIcon;
 
   return (
@@ -295,8 +325,21 @@ export function DictationEditor({
             {state === "starting" ? "Starting…" : "Stop"}
           </button>
         ) : (
-          <span className="font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
-            {saveLabel(saveStatus)}
+          <span className="flex items-center gap-3">
+            {phase === "editing" ? (
+              <button
+                type="button"
+                onClick={() => void handleResume()}
+                disabled={resuming}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+              >
+                <MicrophoneIcon aria-hidden="true" className="size-4" />
+                {resuming ? "Resuming…" : "Resume recording"}
+              </button>
+            ) : null}
+            <span className="font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+              {saveLabel(saveStatus)}
+            </span>
           </span>
         )}
       </div>
@@ -307,9 +350,9 @@ export function DictationEditor({
         {templateName ?? "Free-form dictation"}
       </p>
 
-      {error ? (
+      {error || resumeError ? (
         <p className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mx-8 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-          {error}
+          {error ?? resumeError}
         </p>
       ) : null}
 
