@@ -36,8 +36,10 @@ import {
 // becomes an editable Markdown note that auto-saves. Reopening a past
 // dictation lands straight in the editable state.
 //
-// med-scribe's DictationEditor is the reference; its template-hint + section
-// machinery is a deliberate follow-on and is intentionally not ported here.
+// When the dictation follows a template, its Markdown scaffold sits above the
+// transcript: the clinician dictates with the structure in view and the
+// finalised note keeps it. Section-aware dictation (routing speech into named
+// sections) is a deliberate follow-on and is not done here.
 
 // Carries the intake's microphone choice across the navigation to this page.
 const DEVICE_KEY = "bizen:dictation:device";
@@ -72,6 +74,12 @@ function buildDoc(finalized: string, partialText: string | null): JSONContent {
   };
 }
 
+/** Prepend the template scaffold (if any) above a transcript/note doc. */
+function withTemplate(prefix: JSONContent[], doc: JSONContent): JSONContent {
+  if (prefix.length === 0) return doc;
+  return { type: "doc", content: [...prefix, ...(doc.content ?? [])] };
+}
+
 /** Recreate the editor state so the undo stack drops streamed/seeded edits. */
 function resetHistory(editor: Editor) {
   const { state, view } = editor;
@@ -88,6 +96,7 @@ export function DictationEditor({
   transcriptionId,
   templateId,
   templateName,
+  templateContent,
   initialNote,
   transcriptText,
   initialSegments,
@@ -97,6 +106,9 @@ export function DictationEditor({
   transcriptionId: string;
   templateId: string | null;
   templateName: string | null;
+  // The template's Markdown scaffold — shown above the transcript so the
+  // clinician dictates into the structure. Null for a free-form dictation.
+  templateContent: string | null;
   initialNote: string | null;
   transcriptText: string;
   // Finalised segments already on the session — seeded into a resumed
@@ -125,6 +137,9 @@ export function DictationEditor({
   const startedRef = useRef(false);
   const seededRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The template scaffold parsed to ProseMirror nodes — the prefix prepended
+  // ahead of the transcript. `null` until parsed; `[]` means no template.
+  const templateDocRef = useRef<JSONContent[] | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -212,6 +227,22 @@ export function DictationEditor({
     );
   }, [phase, start, templateId, transcriptionId, initialSegments]);
 
+  // Parse the template scaffold to ProseMirror nodes once the editor exists,
+  // so the seed and streaming effects can prepend it. Declared ahead of them
+  // so it runs first on the mount that creates the editor.
+  useEffect(() => {
+    if (!editor || templateDocRef.current !== null) return;
+    if (templateContent && templateContent.trim()) {
+      editor.commands.setContent(templateContent, {
+        contentType: "markdown",
+        emitUpdate: false,
+      });
+      templateDocRef.current = editor.getJSON().content ?? [];
+    } else {
+      templateDocRef.current = [];
+    }
+  }, [editor, templateContent]);
+
   // Seed the editor for a dictation opened straight into the editable state.
   useEffect(() => {
     if (!editor || seededRef.current || phase === "recording") return;
@@ -221,19 +252,27 @@ export function DictationEditor({
         contentType: "markdown",
         emitUpdate: false,
       });
-    } else if (transcriptText) {
-      editor.commands.setContent(buildDoc(transcriptText, null), {
-        emitUpdate: false,
-      });
+    } else if (transcriptText || (templateDocRef.current?.length ?? 0) > 0) {
+      editor.commands.setContent(
+        withTemplate(
+          templateDocRef.current ?? [],
+          buildDoc(transcriptText, null),
+        ),
+        { emitUpdate: false },
+      );
     }
     resetHistory(editor);
   }, [editor, phase, initialNote, transcriptText]);
 
-  // Stream finalised + partial text into the editor while recording.
+  // Stream finalised + partial text into the editor while recording, below
+  // the template scaffold.
   useEffect(() => {
     if (!editor || phase !== "recording") return;
     editor.commands.setContent(
-      buildDoc(segmentsToText(segments), partial?.text ?? null),
+      withTemplate(
+        templateDocRef.current ?? [],
+        buildDoc(segmentsToText(segments), partial?.text ?? null),
+      ),
       { emitUpdate: false },
     );
     const el = scrollRef.current;
@@ -264,9 +303,10 @@ export function DictationEditor({
       const finalText = result
         ? segmentsToText(result.segments)
         : segmentsToText(segments);
-      editor.commands.setContent(buildDoc(finalText, null), {
-        emitUpdate: false,
-      });
+      editor.commands.setContent(
+        withTemplate(templateDocRef.current ?? [], buildDoc(finalText, null)),
+        { emitUpdate: false },
+      );
       resetHistory(editor);
       void doSave(editor.getMarkdown());
     }

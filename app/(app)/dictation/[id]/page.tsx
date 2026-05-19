@@ -48,13 +48,17 @@ export default async function DictationDetailPage({
     endOffsetMs: s.endOffsetMs,
   }));
 
-  // Resolve the template name for the editor's format chip.
+  // Resolve the template — its name labels the editor's format chip, its
+  // content is the Markdown scaffold the editor shows above the transcript.
   let templateName: string | null = null;
+  let templateContent: string | null = null;
   if (dictation.templateId) {
     try {
-      templateName = (await getTemplate(dictation.templateId)).name;
+      const template = await getTemplate(dictation.templateId);
+      templateName = template.name;
+      templateContent = template.content;
     } catch {
-      templateName = null;
+      /* template retired or unavailable — fall back to free-form */
     }
   }
 
@@ -96,6 +100,7 @@ export default async function DictationDetailPage({
           transcriptionId={dictation.id}
           templateId={dictation.templateId}
           templateName={templateName}
+          templateContent={templateContent}
           initialNote={dictation.noteContent}
           transcriptText={transcriptText}
           initialSegments={initialSegments}
