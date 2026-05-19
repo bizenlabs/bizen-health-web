@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PencilSquareIcon } from "@heroicons/react/20/solid";
 import clsx from "clsx";
+import { Input } from "@/components/catalyst/input";
 import { renameTranscriptionAction } from "@/app/(app)/transcription-actions";
 
 // The dictation's name, shown as the page heading and editable in place. A
@@ -66,7 +67,7 @@ export function DictationTitle({
   if (editing) {
     return (
       <div className="mt-3">
-        <input
+        <Input
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -79,7 +80,7 @@ export function DictationTitle({
           maxLength={255}
           placeholder={fallbackLabel}
           aria-label="Dictation name"
-          className="w-full max-w-md rounded-lg border border-zinc-300 px-2.5 py-1 text-2xl font-semibold tracking-tight text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/5 focus:outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-transparent dark:text-white"
+          className="max-w-md"
         />
         {error ? (
           <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
