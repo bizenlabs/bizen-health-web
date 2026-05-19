@@ -5,6 +5,7 @@ import { ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
 import { getTemplate } from "@/lib/templates";
 import { getTranscription } from "@/lib/transcriptions";
+import { DictationDeleteButton } from "../_components/dictation-delete-button";
 import { DictationEditor } from "../_components/dictation-editor";
 
 // The unified dictation surface. Reached from the library, or from intake with
@@ -44,20 +45,30 @@ export default async function DictationDetailPage({
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
-      <header className="shrink-0">
-        <Link
-          href="/dictation"
-          className="inline-flex items-center gap-1 font-mono text-[11px] font-medium tracking-[0.15em] text-zinc-400 uppercase transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-        >
-          <ChevronLeftIcon className="size-3.5" />
-          Dictation
-        </Link>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
-          Dictation
-        </h1>
-        <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-          {new Date(dictation.startedAt).toLocaleString()}
-        </p>
+      <header className="flex shrink-0 items-start justify-between gap-4">
+        <div>
+          <Link
+            href="/dictation"
+            className="inline-flex items-center gap-1 font-mono text-[11px] font-medium tracking-[0.15em] text-zinc-400 uppercase transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          >
+            <ChevronLeftIcon className="size-3.5" />
+            Dictation
+          </Link>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
+            Dictation
+          </h1>
+          <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            {new Date(dictation.startedAt).toLocaleString()}
+          </p>
+        </div>
+        {/* No delete control mid-recording — the session must be stopped
+            first; afterwards it can be deleted (and restored) freely. */}
+        {dictation.status === "IN_PROGRESS" && !dictation.voided ? null : (
+          <DictationDeleteButton
+            transcriptionId={dictation.id}
+            voided={dictation.voided}
+          />
+        )}
       </header>
 
       {/* The editor fills the remaining height. */}
