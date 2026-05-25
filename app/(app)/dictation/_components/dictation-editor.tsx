@@ -7,7 +7,9 @@ import {
   ArrowUturnRightIcon,
   DocumentTextIcon,
   MicrophoneIcon,
+  PauseIcon,
   PencilSquareIcon,
+  PlayIcon,
   StopIcon,
 } from "@heroicons/react/20/solid";
 import clsx from "clsx";
@@ -118,7 +120,8 @@ export function DictationEditor({
   autoRecord: boolean;
 }) {
   const router = useRouter();
-  const { state, error, segments, partial, start, stop } = useTranscription();
+  const { state, error, segments, partial, start, pause, resume, stop } =
+    useTranscription();
 
   const [stopped, setStopped] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -126,12 +129,16 @@ export function DictationEditor({
   const [resumeError, setResumeError] = useState<string | null>(null);
 
   // `phase` is derived, not stored — it has no transition the user can't
-  // express as "voided / recording done / still recording".
+  // express as "voided / recording done / still recording". A paused session
+  // is still in the recording phase: the editor stays read-only and the
+  // transcript stream is just temporarily muted.
   const phase: Phase = voided
     ? "voided"
     : !autoRecord || stopped || state === "error"
       ? "editing"
       : "recording";
+
+  const paused = state === "paused";
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const startedRef = useRef(false);
@@ -295,7 +302,8 @@ export function DictationEditor({
     return () => window.removeEventListener("beforeunload", handler);
   }, [phase]);
 
-  const recording = state === "starting" || state === "recording";
+  const recording =
+    state === "starting" || state === "recording" || state === "paused";
 
   async function handleStop() {
     const result = await stop();
@@ -344,26 +352,56 @@ export function DictationEditor({
           <span
             className={clsx(
               "size-1.5 rounded-full",
-              recording
-                ? "animate-pulse bg-red-500"
-                : "bg-zinc-200 dark:bg-zinc-700",
+              paused
+                ? "bg-amber-500"
+                : recording
+                  ? "animate-pulse bg-red-500"
+                  : "bg-zinc-200 dark:bg-zinc-700",
             )}
           />
           <span className="font-mono text-[10px] font-medium tracking-[0.2em] text-zinc-400 uppercase dark:text-zinc-500">
-            {recording ? "Recording" : voided ? "Deleted" : "Note"}
+            {paused
+              ? "Paused"
+              : recording
+                ? "Recording"
+                : voided
+                  ? "Deleted"
+                  : "Note"}
           </span>
         </span>
 
         {recording ? (
-          <button
-            type="button"
-            onClick={() => void handleStop()}
-            disabled={state === "starting"}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
-          >
-            <StopIcon aria-hidden="true" className="size-4" />
-            {state === "starting" ? "Starting…" : "Stop"}
-          </button>
+          <span className="flex items-center gap-2">
+            {paused ? (
+              <button
+                type="button"
+                onClick={resume}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+              >
+                <PlayIcon aria-hidden="true" className="size-4" />
+                Resume
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={pause}
+                disabled={state === "starting"}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                <PauseIcon aria-hidden="true" className="size-4" />
+                Pause
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleStop()}
+              disabled={state === "starting"}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
+            >
+              <StopIcon aria-hidden="true" className="size-4" />
+              {state === "starting" ? "Starting…" : "Stop"}
+            </button>
+          </span>
         ) : (
           <span className="flex items-center gap-3">
             {phase === "editing" ? (

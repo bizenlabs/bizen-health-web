@@ -7,6 +7,11 @@ import { WORKLET_SOURCE } from "./worklet-processor";
 
 export interface AudioCapture {
   start(onChunk: (pcm: Int16Array) => void): Promise<void>;
+  // Mutes the mic track (OS indicator goes dark) and gates the PCM callback
+  // so no chunks are forwarded while paused. The AudioContext + worklet stay
+  // running so resume() is instant.
+  pause(): void;
+  resume(): void;
   stop(): Promise<void>;
   listDevices(): Promise<MediaDeviceInfo[]>;
 }
@@ -17,6 +22,7 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
   let node: AudioWorkletNode | null = null;
   let source: MediaStreamAudioSourceNode | null = null;
   let blobUrl: string | null = null;
+  let paused = false;
 
   return {
     async start(onChunk) {
@@ -48,9 +54,24 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
         channelCount: 1,
       });
       node.port.onmessage = (ev: MessageEvent<Int16Array>) => {
+        if (paused) return;
         onChunk(ev.data);
       };
       source.connect(node);
+    },
+
+    pause() {
+      paused = true;
+      stream?.getAudioTracks().forEach((t) => {
+        t.enabled = false;
+      });
+    },
+
+    resume() {
+      stream?.getAudioTracks().forEach((t) => {
+        t.enabled = true;
+      });
+      paused = false;
     },
 
     async stop() {

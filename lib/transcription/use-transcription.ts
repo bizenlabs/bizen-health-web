@@ -27,6 +27,7 @@ export type RecorderState =
   | "idle"
   | "starting"
   | "recording"
+  | "paused"
   | "stopping"
   | "error";
 
@@ -49,6 +50,12 @@ export interface UseTranscriptionResult {
       seedSegments?: LiveSegment[];
     },
   ) => Promise<void>;
+  // Mute the mic + gate audio without tearing down the Deepgram WS or the
+  // backend session — resume() picks up in the same session without re-minting
+  // a token or reconnecting. For the heavy "fully stop then start again"
+  // path, finalise with stop() and the page-level reopen flow.
+  pause: () => void;
+  resume: () => void;
   stop: () => Promise<TranscriptionDetail | null>;
 }
 
@@ -235,6 +242,21 @@ export function useTranscription(): UseTranscriptionResult {
     [handleEvent, teardown],
   );
 
+  const pause = useCallback(() => {
+    if (!captureRef.current) return;
+    captureRef.current.pause();
+    // Any in-flight partial won't be finalised once audio goes silent; clear
+    // it so the UI doesn't show a stale italicised tail while paused.
+    setPartial(null);
+    setState("paused");
+  }, []);
+
+  const resume = useCallback(() => {
+    if (!captureRef.current) return;
+    captureRef.current.resume();
+    setState("recording");
+  }, []);
+
   const stop = useCallback(async (): Promise<TranscriptionDetail | null> => {
     liveRef.current = false;
     setState("stopping");
@@ -284,5 +306,15 @@ export function useTranscription(): UseTranscriptionResult {
     };
   }, [clearFlushTimer]);
 
-  return { state, error, transcriptionId, segments, partial, start, stop };
+  return {
+    state,
+    error,
+    transcriptionId,
+    segments,
+    partial,
+    start,
+    pause,
+    resume,
+    stop,
+  };
 }

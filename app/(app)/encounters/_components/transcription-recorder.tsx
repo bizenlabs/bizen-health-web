@@ -12,9 +12,12 @@ export function TranscriptionRecorder({
   encounterId: string;
 }) {
   const router = useRouter();
-  const { state, error, segments, partial, start, stop } = useTranscription();
+  const { state, error, segments, partial, start, pause, resume, stop } =
+    useTranscription();
 
   const recording = state === "recording";
+  const paused = state === "paused";
+  const live = recording || paused;
   const busy = state === "starting" || state === "stopping";
 
   async function handleStart() {
@@ -33,30 +36,54 @@ export function TranscriptionRecorder({
       ? "Starting…"
       : state === "stopping"
         ? "Saving…"
-        : recording
-          ? "Recording…"
-          : "New transcription";
+        : paused
+          ? "Paused"
+          : recording
+            ? "Recording…"
+            : "New transcription";
 
   return (
     <div className="rounded-md border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          {recording ? (
+          {paused ? (
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+          ) : recording ? (
             <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
           ) : null}
           <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
             {heading}
           </h3>
         </div>
-        {recording ? (
-          <button
-            type="button"
-            onClick={() => void handleStop()}
-            disabled={busy}
-            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/40 dark:text-red-300 dark:hover:bg-red-950/40"
-          >
-            Stop &amp; save
-          </button>
+        {live ? (
+          <div className="flex items-center gap-2">
+            {paused ? (
+              <button
+                type="button"
+                onClick={resume}
+                className="rounded-md border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+              >
+                Resume
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={pause}
+                disabled={busy}
+                className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Pause
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleStop()}
+              disabled={busy}
+              className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/40 dark:text-red-300 dark:hover:bg-red-950/40"
+            >
+              Stop &amp; save
+            </button>
+          </div>
         ) : (
           <button
             type="button"
@@ -94,7 +121,7 @@ export function TranscriptionRecorder({
         </div>
       ) : null}
 
-      {!recording && !busy && segments.length === 0 ? (
+      {!live && !busy && segments.length === 0 ? (
         <p className="mt-2 text-xs text-zinc-500">
           Streams audio to Deepgram and transcribes the consultation. The audio
           itself is never stored — only the transcript.
