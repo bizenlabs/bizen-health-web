@@ -13,12 +13,7 @@ import {
   StopIcon,
 } from "@heroicons/react/20/solid";
 import clsx from "clsx";
-import {
-  type Editor,
-  EditorContent,
-  type JSONContent,
-  useEditor,
-} from "@tiptap/react";
+import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "@tiptap/markdown";
@@ -31,56 +26,28 @@ import {
   type LiveSegment,
   useTranscription,
 } from "@/lib/transcription/use-transcription";
+import { TemplateHint } from "./template-hint-extension";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
-// While the mic is live it is read-only and the transcript streams in (the
-// last, not-yet-finalised words show as italic "partial" text); on stop it
-// becomes an editable Markdown note that auto-saves. Reopening a past
-// dictation lands straight in the editable state.
+// While the mic is live the editor is read-only and finalised utterances are
+// *incrementally inserted* at a tracked position; the in-progress (partial)
+// text is shown italic at the same spot and replaced on every update. On stop
+// the editor becomes editable and auto-saves.
 //
-// When the dictation follows a template, its Markdown scaffold sits above the
-// transcript: the clinician dictates with the structure in view and the
-// finalised note keeps it. Section-aware dictation (routing speech into named
-// sections) is a deliberate follow-on and is not done here.
+// With a template, the cursor lands inside the first paragraph after the
+// first heading so dictation drops into the section structure rather than at
+// the very end of the scaffold. Clinicians can also click into a section
+// before pressing Resume to dictate there — the position is carried across
+// the navigation via sessionStorage.
 
 // Carries the intake's microphone choice across the navigation to this page.
 const DEVICE_KEY = "bizen:dictation:device";
+// Carries the editor's cursor across the editing → resume-recording
+// navigation. Read once on the next mount and cleared.
+const CURSOR_KEY = "bizen:dictation:cursor";
 
 type Phase = "recording" | "editing" | "voided";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-/** Join finalised utterances into a single flowing string. */
-function segmentsToText(segments: { text: string }[]): string {
-  return segments
-    .map((s) => s.text.trim())
-    .filter(Boolean)
-    .join(" ");
-}
-
-/** A one-paragraph doc: finalised text, plus any partial run in italic. */
-function buildDoc(finalized: string, partialText: string | null): JSONContent {
-  const content: JSONContent[] = [];
-  if (finalized) content.push({ type: "text", text: finalized });
-  if (partialText) {
-    content.push({
-      type: "text",
-      marks: [{ type: "italic" }],
-      text: (finalized ? " " : "") + partialText,
-    });
-  }
-  return {
-    type: "doc",
-    content: [
-      content.length ? { type: "paragraph", content } : { type: "paragraph" },
-    ],
-  };
-}
-
-/** Prepend the template scaffold (if any) above a transcript/note doc. */
-function withTemplate(prefix: JSONContent[], doc: JSONContent): JSONContent {
-  if (prefix.length === 0) return doc;
-  return { type: "doc", content: [...prefix, ...(doc.content ?? [])] };
-}
 
 /** Recreate the editor state so the undo stack drops streamed/seeded edits. */
 function resetHistory(editor: Editor) {
@@ -92,6 +59,62 @@ function resetHistory(editor: Editor) {
       selection: state.selection,
     }),
   );
+}
+
+// Markdown collapses consecutive headings — there is no paragraph node between
+// `## A` and `## B`. Walk the doc and insert an empty paragraph after every
+// heading that lacks one, so every section has a writable slot for the
+// cursor to land in.
+function ensureTemplateStructure(editor: Editor) {
+  const { paragraph } = editor.schema.nodes;
+  const positions: number[] = [];
+  editor.state.doc.forEach((node, offset) => {
+    if (node.type.name !== "heading") return;
+    const afterHeading = offset + node.nodeSize;
+    const $pos = editor.state.doc.resolve(afterHeading);
+    if (!$pos.nodeAfter || $pos.nodeAfter.type.name !== "paragraph") {
+      positions.push(afterHeading);
+    }
+  });
+  if (positions.length === 0) return;
+  let tr = editor.state.tr;
+  for (let i = positions.length - 1; i >= 0; i--) {
+    tr = tr.insert(positions[i], paragraph.create());
+  }
+  editor.view.dispatch(tr);
+}
+
+/** Position inside the first paragraph after the first top-level heading. */
+function findPositionAfterFirstHeading(editor: Editor): number | null {
+  let foundHeading = false;
+  let result: number | null = null;
+  editor.state.doc.forEach((node, offset) => {
+    if (result !== null) return;
+    if (node.type.name === "heading") {
+      foundHeading = true;
+      return;
+    }
+    if (foundHeading && node.type.name === "paragraph") {
+      result = offset + 1;
+    }
+  });
+  return result;
+}
+
+function blockHasContent(editor: Editor, pos: number): boolean {
+  try {
+    const $pos = editor.state.doc.resolve(pos);
+    return $pos.parent.textContent.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function joinSegments(segs: { text: string }[]): string {
+  return segs
+    .map((s) => s.text.trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function DictationEditor({
@@ -142,11 +165,21 @@ export function DictationEditor({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const startedRef = useRef(false);
-  const seededRef = useRef(false);
+  // Flips true the first time the init effect seeds the editor — gates the
+  // streaming effect so it doesn't run before insertPos is resolved.
+  const initRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The template scaffold parsed to ProseMirror nodes — the prefix prepended
-  // ahead of the transcript. `null` until parsed; `[]` means no template.
-  const templateDocRef = useRef<JSONContent[] | null>(null);
+  // The doc position where the next chunk of finalised text will go. Tracked
+  // so dictation lands inside a section instead of at the very end. `null`
+  // until the init effect resolves it.
+  const insertPosRef = useRef<number | null>(null);
+  // How many of `segments` have already been inserted into the editor. Seeded
+  // to `initialSegments.length` because those land in the editor as part of
+  // the seeded Markdown, not via the stream.
+  const processedSegCountRef = useRef<number>(0);
+  // Where the current tentative (italic) partial text lives so it can be
+  // deleted before the next tick replaces it.
+  const partialRangeRef = useRef<{ from: number; length: number } | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -155,6 +188,7 @@ export function DictationEditor({
       Placeholder.configure({
         placeholder: "Your dictated note will appear here…",
       }),
+      TemplateHint,
     ],
     editable: false,
     immediatelyRender: false,
@@ -205,7 +239,8 @@ export function DictationEditor({
     };
   }, []);
 
-  // Save genuine user edits (programmatic setContent passes emitUpdate:false).
+  // Save genuine user edits. Programmatic stream inserts fire `update` too,
+  // but they're gated out by the `phase !== "editing"` check.
   useEffect(() => {
     if (!editor) return;
     const onUpdate = () => {
@@ -234,56 +269,127 @@ export function DictationEditor({
     );
   }, [phase, start, templateId, transcriptionId, initialSegments]);
 
-  // Parse the template scaffold to ProseMirror nodes once the editor exists,
-  // so the seed and streaming effects can prepend it. Declared ahead of them
-  // so it runs first on the mount that creates the editor.
+  // --- One-shot init: seed the editor and place insertPos ---------------
   useEffect(() => {
-    if (!editor || templateDocRef.current !== null) return;
-    if (templateContent && templateContent.trim()) {
-      editor.commands.setContent(templateContent, {
-        contentType: "markdown",
-        emitUpdate: false,
-      });
-      templateDocRef.current = editor.getJSON().content ?? [];
-    } else {
-      templateDocRef.current = [];
-    }
-  }, [editor, templateContent]);
+    if (!editor || initRef.current) return;
 
-  // Seed the editor for a dictation opened straight into the editable state.
-  useEffect(() => {
-    if (!editor || seededRef.current || phase === "recording") return;
-    seededRef.current = true;
+    const templateBody = templateContent?.trim() ?? "";
+    const transcriptBody = transcriptText?.trim() ?? "";
+
     if (initialNote) {
+      // Clinician has a saved version of this note — load it as-is.
       editor.commands.setContent(initialNote, {
         contentType: "markdown",
         emitUpdate: false,
       });
-    } else if (transcriptText || (templateDocRef.current?.length ?? 0) > 0) {
-      editor.commands.setContent(
-        withTemplate(
-          templateDocRef.current ?? [],
-          buildDoc(transcriptText, null),
-        ),
-        { emitUpdate: false },
-      );
+    } else if (templateBody && transcriptBody) {
+      // Pre-save state with raw transcript collected — show both.
+      editor.commands.setContent(`${templateBody}\n\n${transcriptBody}`, {
+        contentType: "markdown",
+        emitUpdate: false,
+      });
+    } else if (templateBody) {
+      editor.commands.setContent(templateBody, {
+        contentType: "markdown",
+        emitUpdate: false,
+      });
+    } else if (transcriptBody) {
+      editor.commands.setContent(transcriptBody, {
+        contentType: "markdown",
+        emitUpdate: false,
+      });
     }
-    resetHistory(editor);
-  }, [editor, phase, initialNote, transcriptText]);
 
-  // Stream finalised + partial text into the editor while recording, below
-  // the template scaffold.
+    if (templateBody) ensureTemplateStructure(editor);
+
+    // Where dictation should land.
+    let pos: number | null = null;
+
+    // 1. A cursor persisted by the Resume button on the previous sitting.
+    try {
+      const stored = sessionStorage.getItem(CURSOR_KEY);
+      if (stored !== null) {
+        sessionStorage.removeItem(CURSOR_KEY);
+        const n = Number.parseInt(stored, 10);
+        const max = Math.max(1, editor.state.doc.content.size - 1);
+        if (Number.isFinite(n) && n >= 1 && n <= max) pos = n;
+      }
+    } catch {
+      /* sessionStorage unavailable */
+    }
+
+    // 2. Templated: first paragraph after the first heading.
+    if (pos === null && templateBody) {
+      pos = findPositionAfterFirstHeading(editor);
+    }
+
+    // 3. Fallback: end of doc.
+    if (pos === null) {
+      pos = Math.max(1, editor.state.doc.content.size - 1);
+    }
+
+    insertPosRef.current = pos;
+    // Seed segments already live in the editor as part of the seeded markdown
+    // — mark them processed so the stream doesn't double-insert them.
+    processedSegCountRef.current = initialSegments.length;
+    resetHistory(editor);
+    initRef.current = true;
+  }, [editor, initialNote, templateContent, transcriptText, initialSegments]);
+
+  // --- Stream finalised + partial text at insertPos ---------------------
   useEffect(() => {
-    if (!editor || phase !== "recording") return;
-    editor.commands.setContent(
-      withTemplate(
-        templateDocRef.current ?? [],
-        buildDoc(segmentsToText(segments), partial?.text ?? null),
-      ),
-      { emitUpdate: false },
-    );
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!editor || !initRef.current || phase !== "recording") return;
+    if (insertPosRef.current === null) return;
+
+    // Drop any tentative partial from the previous tick before we change
+    // anything else — its range is only valid against the current doc.
+    const range = partialRangeRef.current;
+    if (range) {
+      editor.commands.deleteRange({
+        from: range.from,
+        to: range.from + range.length,
+      });
+      partialRangeRef.current = null;
+    }
+
+    // Insert anything newly finalised at insertPos, advancing it past the
+    // inserted text so the next chunk continues where this one ended.
+    if (segments.length > processedSegCountRef.current) {
+      const text = joinSegments(segments.slice(processedSegCountRef.current));
+      processedSegCountRef.current = segments.length;
+      if (text) {
+        const from = insertPosRef.current;
+        const insert = (blockHasContent(editor, from) ? " " : "") + text;
+        editor.commands.insertContentAt(from, insert);
+        insertPosRef.current = from + insert.length;
+      }
+    }
+
+    // Re-show the live partial at the (possibly advanced) insertPos.
+    if (partial?.text) {
+      const from = insertPosRef.current;
+      const insert = (blockHasContent(editor, from) ? " " : "") + partial.text;
+      editor.commands.insertContentAt(from, {
+        type: "text",
+        text: insert,
+        marks: [{ type: "italic" }],
+      });
+      partialRangeRef.current = { from, length: insert.length };
+    }
+
+    // Keep the insertion point visible — only nudge if it has drifted off.
+    const container = scrollRef.current;
+    if (container) {
+      try {
+        const coords = editor.view.coordsAtPos(insertPosRef.current);
+        const rect = container.getBoundingClientRect();
+        if (coords.top < rect.top + 40 || coords.bottom > rect.bottom - 40) {
+          container.scrollTop += coords.top - (rect.top + rect.height / 2);
+        }
+      } catch {
+        /* coordsAtPos can throw mid-transaction — skip the scroll */
+      }
+    }
   }, [editor, phase, segments, partial]);
 
   // Keep `editable` in step with the phase. The `false` suppresses the
@@ -308,25 +414,55 @@ export function DictationEditor({
   async function handleStop() {
     const result = await stop();
     if (editor) {
-      const finalText = result
-        ? segmentsToText(result.segments)
-        : segmentsToText(segments);
-      editor.commands.setContent(
-        withTemplate(templateDocRef.current ?? [], buildDoc(finalText, null)),
-        { emitUpdate: false },
-      );
+      // Drop any lingering partial first.
+      const range = partialRangeRef.current;
+      if (range) {
+        editor.commands.deleteRange({
+          from: range.from,
+          to: range.from + range.length,
+        });
+        partialRangeRef.current = null;
+      }
+      // Insert anything finalised but not yet picked up by the stream effect.
+      const finalSegments = result?.segments ?? segments;
+      if (
+        finalSegments.length > processedSegCountRef.current &&
+        insertPosRef.current !== null
+      ) {
+        const text = joinSegments(
+          finalSegments.slice(processedSegCountRef.current),
+        );
+        processedSegCountRef.current = finalSegments.length;
+        if (text) {
+          const from = insertPosRef.current;
+          const insert = (blockHasContent(editor, from) ? " " : "") + text;
+          editor.commands.insertContentAt(from, insert);
+          insertPosRef.current = from + insert.length;
+        }
+      }
       resetHistory(editor);
       void doSave(editor.getMarkdown());
     }
     setStopped(true);
   }
 
-  // Resume a finalised dictation. Reopen it server-side, then navigate with a
-  // fresh `record` value — the page keys the editor on it, so this remounts
-  // straight into a new recording session that appends to the transcript.
+  // Resume a finalised dictation. Reopen it server-side, persist the current
+  // cursor so the new sitting picks up where the clinician put it, then
+  // navigate with a fresh `record` value — the page keys the editor on it, so
+  // this remounts straight into a new recording session.
   async function handleResume() {
     setResuming(true);
     setResumeError(null);
+    if (editor) {
+      try {
+        sessionStorage.setItem(
+          CURSOR_KEY,
+          String(editor.state.selection.anchor),
+        );
+      } catch {
+        /* sessionStorage unavailable */
+      }
+    }
     const res = await reopenTranscriptionAction(transcriptionId);
     if (res.ok) {
       router.push(`/dictation/${transcriptionId}?record=${Date.now()}`);

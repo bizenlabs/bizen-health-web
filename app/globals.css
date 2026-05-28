@@ -36,3 +36,16 @@ body {
     "Segoe UI",
     sans-serif;
 }
+
+/* Template helper text in the dictation editor — `[Patient's primary reason
+   for visit]` and `(Document in patient's own words when possible)`. Visually
+   demoted so the clinician sees them as hints, not their own content. */
+.template-hint {
+  color: rgb(161 161 170);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.dark .template-hint {
+  color: rgb(113 113 122);
+}
