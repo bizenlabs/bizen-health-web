@@ -249,17 +249,6 @@ export function AppShell({
                   <MicrophoneIcon />
                   <SidebarLabel>Dictation</SidebarLabel>
                 </SidebarItem>
-                <SidebarItem
-                  href="/settings"
-                  current={
-                    pathname === "/settings" ||
-                    (pathname.startsWith("/settings/") &&
-                      !pathname.startsWith("/settings/team"))
-                  }
-                >
-                  <Cog6ToothIcon />
-                  <SidebarLabel>Settings</SidebarLabel>
-                </SidebarItem>
                 {isTenantAdmin ? (
                   <SidebarItem
                     href="/settings/team"
