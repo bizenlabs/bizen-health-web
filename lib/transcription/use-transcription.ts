@@ -56,6 +56,11 @@ export interface UseTranscriptionResult {
   // path, finalise with stop() and the page-level reopen flow.
   pause: () => void;
   resume: () => void;
+  // Swap the live recording onto a different microphone without ending the
+  // session — re-acquires the mic and reconnects the Deepgram socket while
+  // keeping the transcription id, accumulated segments, and sequence numbering
+  // intact. A no-op unless a session is live.
+  switchDevice: (deviceId: string | null) => Promise<void>;
   stop: () => Promise<TranscriptionDetail | null>;
 }
 
@@ -73,6 +78,9 @@ export function useTranscription(): UseTranscriptionResult {
   const streamRef = useRef<TranscriptionStream | null>(null);
   const captureRef = useRef<AudioCapture | null>(null);
   const idRef = useRef<string | null>(null);
+  // The input the current session was started with — replayed by switchDevice
+  // so the reconnected stream keeps the same mode (diarization on/off).
+  const inputRef = useRef<StartTranscriptionInput | null>(null);
   // True between session creation and an explicit stop()/failure. The unmount
   // cleanup uses it to finalise a session abandoned by a client-side nav.
   const liveRef = useRef<boolean>(false);
@@ -178,6 +186,7 @@ export function useTranscription(): UseTranscriptionResult {
       },
     ) => {
       const seed = opts?.seedSegments ?? [];
+      inputRef.current = input;
       setError(null);
       setState("starting");
       setSegments(seed);
@@ -257,6 +266,48 @@ export function useTranscription(): UseTranscriptionResult {
     setState("recording");
   }, []);
 
+  const switchDevice = useCallback(
+    async (deviceId: string | null) => {
+      const id = idRef.current;
+      const input = inputRef.current;
+      // Only swap a live session — there's nothing to re-point otherwise.
+      if (!id || !input || !liveRef.current) return;
+      setState("starting");
+      setPartial(null);
+      // Persist whatever's buffered before tearing the old pipe down, then
+      // drop the old capture + socket. The session id and segments survive.
+      await flush();
+      await teardown();
+      try {
+        const stream = createDeepgramStream({
+          diarize: input.mode === "ENCOUNTER",
+        });
+        streamRef.current = stream;
+        stream.on(handleEvent);
+
+        const capture = createAudioCapture(deviceId ?? undefined);
+        captureRef.current = capture;
+        await capture.start((chunk) => stream.sendPcm(chunk));
+
+        await stream.connect({
+          getToken: async () => {
+            const key = await mintDeepgramKeyAction(id);
+            if (!key.ok) throw new Error(key.error);
+            return key.data.apiKey;
+          },
+        });
+        setState("recording");
+      } catch (err) {
+        // Leave the session IN_PROGRESS (don't fail it) so the clinician can
+        // pick another mic and try again, or resume it in a later sitting.
+        setError(err instanceof Error ? err.message : String(err));
+        setState("error");
+        await teardown();
+      }
+    },
+    [flush, handleEvent, teardown],
+  );
+
   const stop = useCallback(async (): Promise<TranscriptionDetail | null> => {
     liveRef.current = false;
     setState("stopping");
@@ -315,6 +366,7 @@ export function useTranscription(): UseTranscriptionResult {
     start,
     pause,
     resume,
+    switchDevice,
     stop,
   };
 }

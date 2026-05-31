@@ -26,6 +26,10 @@ import {
   type LiveSegment,
   useTranscription,
 } from "@/lib/transcription/use-transcription";
+import {
+  type AudioInputDevice,
+  useAudioDevices,
+} from "@/lib/transcription/use-audio-devices";
 import { TemplateHint } from "./template-hint-extension";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
@@ -143,8 +147,19 @@ export function DictationEditor({
   autoRecord: boolean;
 }) {
   const router = useRouter();
-  const { state, error, segments, partial, start, pause, resume, stop } =
-    useTranscription();
+  const {
+    state,
+    error,
+    segments,
+    partial,
+    start,
+    pause,
+    resume,
+    switchDevice,
+    stop,
+  } = useTranscription();
+  const { devices, selectedDeviceId, setSelectedDeviceId, hasLabels } =
+    useAudioDevices();
 
   const [stopped, setStopped] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -162,6 +177,42 @@ export function DictationEditor({
       : "recording";
 
   const paused = state === "paused";
+
+  // Reflect the mic carried over from intake (or a previous sitting) in the
+  // picker once the browser hands back real device labels — but only if it's
+  // still present. If it's gone (unplugged / different machine), the hook's
+  // default stands, matching the capture layer's fallback to the default mic.
+  const seededDeviceRef = useRef(false);
+  useEffect(() => {
+    if (seededDeviceRef.current || !hasLabels) return;
+    seededDeviceRef.current = true;
+    try {
+      const saved = sessionStorage.getItem(DEVICE_KEY);
+      if (saved && devices.some((d) => d.deviceId === saved)) {
+        setSelectedDeviceId(saved);
+      }
+    } catch {
+      /* sessionStorage unavailable */
+    }
+  }, [hasLabels, devices, setSelectedDeviceId]);
+
+  // Pick a microphone from the editor. Persist it so the next sitting (Resume
+  // remounts the page) starts on it, and — if recording right now — swap the
+  // live session onto it without ending the dictation.
+  const handleDeviceChange = useCallback(
+    (deviceId: string) => {
+      setSelectedDeviceId(deviceId);
+      try {
+        sessionStorage.setItem(DEVICE_KEY, deviceId);
+      } catch {
+        /* sessionStorage unavailable */
+      }
+      if (state === "recording" || state === "paused") {
+        void switchDevice(deviceId);
+      }
+    },
+    [setSelectedDeviceId, state, switchDevice],
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const startedRef = useRef(false);
@@ -508,6 +559,14 @@ export function DictationEditor({
 
         {recording ? (
           <span className="flex items-center gap-2">
+            <MicPicker
+              devices={devices}
+              selectedDeviceId={selectedDeviceId}
+              hasLabels={hasLabels}
+              onChange={handleDeviceChange}
+              disabled={state === "starting"}
+              showSingle
+            />
             {paused ? (
               <button
                 type="button"
@@ -541,15 +600,24 @@ export function DictationEditor({
         ) : (
           <span className="flex items-center gap-3">
             {phase === "editing" ? (
-              <button
-                type="button"
-                onClick={() => void handleResume()}
-                disabled={resuming}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-              >
-                <MicrophoneIcon aria-hidden="true" className="size-4" />
-                {resuming ? "Resuming…" : "Resume recording"}
-              </button>
+              <>
+                <MicPicker
+                  devices={devices}
+                  selectedDeviceId={selectedDeviceId}
+                  hasLabels={hasLabels}
+                  onChange={handleDeviceChange}
+                  disabled={resuming}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleResume()}
+                  disabled={resuming}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                >
+                  <MicrophoneIcon aria-hidden="true" className="size-4" />
+                  {resuming ? "Resuming…" : "Resume recording"}
+                </button>
+              </>
             ) : null}
             <span className="font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
               {saveLabel(saveStatus)}
@@ -589,6 +657,63 @@ export function DictationEditor({
         )}
       </div>
     </div>
+  );
+}
+
+// The editor's microphone control. Mirrors the intake picker's gate: a real
+// dropdown only once the browser has handed back labelled devices and there's
+// more than one to choose between. During recording (`showSingle`) it still
+// names the lone mic so the clinician can see which input is live; in the
+// editing state a single unlabelled device shows nothing — Resume handles it.
+function MicPicker({
+  devices,
+  selectedDeviceId,
+  hasLabels,
+  onChange,
+  disabled = false,
+  showSingle = false,
+}: {
+  devices: AudioInputDevice[];
+  selectedDeviceId: string | null;
+  hasLabels: boolean;
+  onChange: (deviceId: string) => void;
+  disabled?: boolean;
+  showSingle?: boolean;
+}) {
+  const canPick = hasLabels && devices.length > 1;
+
+  if (!canPick) {
+    if (!showSingle || devices.length === 0) return null;
+    return (
+      <span className="flex max-w-[12rem] items-center gap-1.5 text-zinc-400 dark:text-zinc-500">
+        <MicrophoneIcon aria-hidden="true" className="size-4 shrink-0" />
+        <span className="truncate text-xs">
+          {devices[0]?.label || "Default microphone"}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900">
+      <MicrophoneIcon
+        aria-hidden="true"
+        className="size-4 shrink-0 text-zinc-400 dark:text-zinc-500"
+      />
+      <select
+        aria-label="Microphone"
+        value={selectedDeviceId ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="max-w-[10rem] truncate border-0 bg-transparent py-0.5 text-xs text-zinc-700 focus:outline-none disabled:opacity-50 dark:text-zinc-200"
+      >
+        {devices.map((d) => (
+          <option key={d.deviceId} value={d.deviceId}>
+            {d.label || "Microphone"}
+          </option>
+        ))}
+      </select>
+    </span>
   );
 }
 

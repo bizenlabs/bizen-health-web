@@ -16,6 +16,41 @@ export interface AudioCapture {
   listDevices(): Promise<MediaDeviceInfo[]>;
 }
 
+// Acquire the mic stream, pinning the requested device when one is given. The
+// pinned device may be gone — unplugged, or simply absent on the machine where
+// a dictation is resumed — in which case `getUserMedia` rejects with
+// OverconstrainedError (or NotFoundError). Fall back to the browser's default
+// mic so recording still starts rather than dead-ending; the editor's mic
+// picker lets the clinician switch afterwards. Permission denials (NotAllowed)
+// are not recoverable this way and propagate unchanged.
+async function acquireStream(deviceId?: string): Promise<MediaStream> {
+  const base: MediaTrackConstraints = {
+    channelCount: 1,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: deviceId ? { ...base, deviceId: { exact: deviceId } } : base,
+    });
+  } catch (err) {
+    // OverconstrainedError isn't an Error instance in every browser — read the
+    // name off the object directly rather than gating on `instanceof Error`.
+    const name =
+      typeof err === "object" && err !== null && "name" in err
+        ? String((err as { name: unknown }).name)
+        : "";
+    if (
+      deviceId &&
+      (name === "OverconstrainedError" || name === "NotFoundError")
+    ) {
+      return await navigator.mediaDevices.getUserMedia({ audio: base });
+    }
+    throw err;
+  }
+}
+
 export function createAudioCapture(deviceId?: string): AudioCapture {
   let stream: MediaStream | null = null;
   let ctx: AudioContext | null = null;
@@ -26,15 +61,7 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
 
   return {
     async start(onChunk) {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: deviceId ? { exact: deviceId } : undefined,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      stream = await acquireStream(deviceId);
 
       // Request a 16 kHz AudioContext; browsers that can't honor it resample
       // transparently and the worklet normalizes the rest.
