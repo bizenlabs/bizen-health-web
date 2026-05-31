@@ -63,7 +63,7 @@ export default async function DictationDetailPage({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
+    <div className="flex w-full flex-1 flex-col">
       <header className="flex shrink-0 items-start justify-between gap-4">
         <div>
           <Link

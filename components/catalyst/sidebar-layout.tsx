@@ -52,9 +52,14 @@ export function SidebarLayout({
   navbar,
   sidebar,
   children,
+  // The inner content wrapper. Defaults to the standard centered, capped
+  // column; routes that need the full content width (e.g. the dictation
+  // editor) can pass an uncapped class.
+  contentClassName = "mx-auto flex w-full max-w-6xl flex-1 flex-col",
 }: React.PropsWithChildren<{
   navbar: React.ReactNode;
   sidebar: React.ReactNode;
+  contentClassName?: string;
 }>) {
   const [showSidebar, setShowSidebar] = useState(false);
 
@@ -85,9 +90,7 @@ export function SidebarLayout({
           (e.g. the dictation editor). Short pages still flow from the top. */}
       <main className="flex flex-1 flex-col pb-2 lg:min-w-0 lg:pt-2 lg:pr-2 lg:pl-64">
         <div className="flex grow flex-col p-6 lg:rounded-lg lg:bg-white lg:p-10 lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10">
-          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
-            {children}
-          </div>
+          <div className={contentClassName}>{children}</div>
         </div>
       </main>
     </div>

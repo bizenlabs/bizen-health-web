@@ -144,6 +144,11 @@ export function AppShell({
     (m) => m.organizationId !== currentOrgId && m.status === "active",
   );
 
+  // The dictation editor (a single dictation, not the list or /new) uses the
+  // full content width rather than the standard centered, capped column.
+  const fullWidth =
+    /^\/dictation\/[^/]+$/.test(pathname) && pathname !== "/dictation/new";
+
   function handleSwitchOrg(organizationId: string, organizationName: string) {
     setPendingOrgName(organizationName);
     startTransition(async () => {
@@ -158,6 +163,11 @@ export function AppShell({
     <>
       <OrgSwitchingOverlay orgName={isPending ? pendingOrgName : null} />
       <SidebarLayout
+        contentClassName={
+          fullWidth
+            ? "flex w-full flex-1 flex-col"
+            : "mx-auto flex w-full max-w-6xl flex-1 flex-col"
+        }
         navbar={
           <Navbar>
             <NavbarSpacer />
