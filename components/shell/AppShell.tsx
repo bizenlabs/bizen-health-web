@@ -144,9 +144,9 @@ export function AppShell({
     (m) => m.organizationId !== currentOrgId && m.status === "active",
   );
 
-  // The dictation editor (a single dictation, not the list or /new) uses the
-  // full content width rather than the standard centered, capped column.
-  const fullWidth =
+  // The dictation editor (a single dictation, not the list or /new) goes
+  // edge-to-edge — no centered cap, no card chrome — since it brings its own.
+  const fullBleed =
     /^\/dictation\/[^/]+$/.test(pathname) && pathname !== "/dictation/new";
 
   function handleSwitchOrg(organizationId: string, organizationName: string) {
@@ -163,11 +163,7 @@ export function AppShell({
     <>
       <OrgSwitchingOverlay orgName={isPending ? pendingOrgName : null} />
       <SidebarLayout
-        contentClassName={
-          fullWidth
-            ? "flex w-full flex-1 flex-col"
-            : "mx-auto flex w-full max-w-6xl flex-1 flex-col"
-        }
+        fullBleed={fullBleed}
         navbar={
           <Navbar>
             <NavbarSpacer />
