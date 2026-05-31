@@ -290,19 +290,20 @@ export function DictationEditor({
     };
   }, []);
 
-  // Save genuine user edits. Programmatic stream inserts fire `update` too,
-  // but they're gated out by the `phase !== "editing"` check.
+  // Save genuine user edits — those made while editing, or while paused.
+  // Programmatic stream inserts fire `update` too, but only during active
+  // recording, which both checks gate out.
   useEffect(() => {
     if (!editor) return;
     const onUpdate = () => {
-      if (phase !== "editing") return;
+      if (phase !== "editing" && !paused) return;
       scheduleSave(editor.getMarkdown());
     };
     editor.on("update", onUpdate);
     return () => {
       editor.off("update", onUpdate);
     };
-  }, [editor, phase, scheduleSave]);
+  }, [editor, phase, paused, scheduleSave]);
 
   // --- Recording: kick off the session once -----------------------------
   useEffect(() => {
@@ -443,13 +444,25 @@ export function DictationEditor({
     }
   }, [editor, phase, segments, partial]);
 
-  // Keep `editable` in step with the phase. The `false` suppresses the
-  // update event — toggling editable is not a content change and must not
-  // trip the auto-save.
+  // Editable while editing, and while *paused* — a paused session mutes the
+  // mic, so manual edits and cursor moves are safe and can't collide with the
+  // (stopped) stream. Only an actively recording editor stays read-only. The
+  // `false` suppresses the update event — toggling editable is not a content
+  // change and must not trip the auto-save.
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(phase === "editing", false);
-  }, [editor, phase]);
+    editor.setEditable(phase === "editing" || paused, false);
+  }, [editor, phase, paused]);
+
+  // On pause, drop the caret at the live insertion point and focus, so the
+  // clinician can read from where dictation left off — and reposition it to
+  // redirect where the next utterances land once they resume.
+  useEffect(() => {
+    if (!editor || !paused || insertPosRef.current === null) return;
+    const max = Math.max(1, editor.state.doc.content.size - 1);
+    const safe = Math.min(Math.max(insertPosRef.current, 1), max);
+    editor.chain().focus().setTextSelection(safe).run();
+  }, [editor, paused]);
 
   // Warn before navigating away mid-recording — audio can't be resumed.
   useEffect(() => {
@@ -495,6 +508,25 @@ export function DictationEditor({
       void doSave(editor.getMarkdown());
     }
     setStopped(true);
+  }
+
+  // Resume a *paused* session (same session, mic un-muted — distinct from the
+  // page-level reopen below). Persist any pending paused edit before the stream
+  // resumes (so a debounced save can't capture transient streamed text), then
+  // continue dictation from wherever the caret now sits.
+  function handleSessionResume() {
+    if (editor) {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+        void doSave(editor.getMarkdown());
+      }
+      const max = Math.max(1, editor.state.doc.content.size - 1);
+      const anchor = editor.state.selection.anchor;
+      insertPosRef.current = Math.min(Math.max(anchor, 1), max);
+      partialRangeRef.current = null;
+    }
+    resume();
   }
 
   // Resume a finalised dictation. Reopen it server-side, persist the current
@@ -570,7 +602,7 @@ export function DictationEditor({
             {paused ? (
               <button
                 type="button"
-                onClick={resume}
+                onClick={handleSessionResume}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
               >
                 <PlayIcon aria-hidden="true" className="size-4" />
@@ -638,8 +670,8 @@ export function DictationEditor({
         </p>
       ) : null}
 
-      {/* Toolbar — only while editable */}
-      {phase === "editing" && editor ? (
+      {/* Toolbar — whenever the editor is editable (editing or paused) */}
+      {(phase === "editing" || paused) && editor ? (
         <Toolbar editor={editor} />
       ) : (
         <div className="mt-4" />
