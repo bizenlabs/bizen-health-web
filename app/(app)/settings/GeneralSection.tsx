@@ -8,7 +8,6 @@ import { OrgNameForm } from "./OrgNameForm";
 
 type Props = {
   orgName: string;
-  tenantSlug: string | null;
   organizationId: string;
   orgType: string | null;
   isAdmin: boolean;
@@ -16,7 +15,6 @@ type Props = {
 
 export function GeneralSection({
   orgName,
-  tenantSlug,
   organizationId,
   orgType,
   isAdmin,
@@ -37,9 +35,6 @@ export function GeneralSection({
             <DescriptionDetails>{orgName}</DescriptionDetails>
           </>
         ) : null}
-
-        <DescriptionTerm>Slug</DescriptionTerm>
-        <DescriptionDetails>{tenantSlug ?? "—"}</DescriptionDetails>
 
         <DescriptionTerm>Account type</DescriptionTerm>
         <DescriptionDetails className="capitalize">

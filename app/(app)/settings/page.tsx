@@ -22,7 +22,6 @@ export default async function Settings() {
 
       <GeneralSection
         orgName={org.name}
-        tenantSlug={session.tenantSlug}
         organizationId={session.organizationId}
         orgType={session.orgType}
         isAdmin={isAdmin}
