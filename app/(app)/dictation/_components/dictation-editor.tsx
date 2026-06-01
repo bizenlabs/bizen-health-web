@@ -558,15 +558,15 @@ export function DictationEditor({
   const TemplateGlyph = templateName ? DocumentTextIcon : PencilSquareIcon;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+    <div className="flex h-full flex-col overflow-hidden">
       {voided ? (
-        <p className="border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-xs text-amber-800 sm:px-8 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
           This dictation has been deleted — it is read-only.
         </p>
       ) : null}
 
       {/* Header — status readout + primary action */}
-      <div className="flex items-center justify-between gap-3 px-6 pt-5 sm:px-8">
+      <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-2">
           <span
             className={clsx(
@@ -659,13 +659,13 @@ export function DictationEditor({
       </div>
 
       {/* Note format */}
-      <p className="flex items-center gap-1.5 px-6 pt-2 font-mono text-[11px] tracking-wide text-zinc-400 sm:px-8 dark:text-zinc-500">
+      <p className="flex items-center gap-1.5 pt-2 font-mono text-[11px] tracking-wide text-zinc-400 dark:text-zinc-500">
         <TemplateGlyph aria-hidden="true" className="size-3.5" />
         {templateName ?? "Free-form dictation"}
       </p>
 
       {error || resumeError ? (
-        <p className="mx-6 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mx-8 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
           {error ?? resumeError}
         </p>
       ) : null}
@@ -678,10 +678,7 @@ export function DictationEditor({
       )}
 
       {/* Editor body — fills the remaining height, scrolls within. */}
-      <div
-        ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8"
-      >
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto pb-2">
         {editor ? (
           <EditorContent editor={editor} />
         ) : (
@@ -764,7 +761,7 @@ function saveLabel(status: SaveStatus): string {
 
 function Toolbar({ editor }: { editor: Editor }) {
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-1 border-y border-zinc-100 px-6 py-1.5 sm:px-8 dark:border-zinc-800/80">
+    <div className="mt-4 flex flex-wrap items-center gap-1 border-y border-zinc-100 py-1.5 dark:border-zinc-800/80">
       <ToolBtn
         label="B"
         bold

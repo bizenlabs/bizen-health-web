@@ -52,24 +52,11 @@ export function SidebarLayout({
   navbar,
   sidebar,
   children,
-  // Edge-to-edge mode: drop the centered max-width cap *and* the surrounding
-  // card chrome (padding, background, rounding, shadow) so the page owns the
-  // full content area. Used by the dictation editor, which brings its own
-  // card. Other routes keep the standard centered, padded column.
-  fullBleed = false,
 }: React.PropsWithChildren<{
   navbar: React.ReactNode;
   sidebar: React.ReactNode;
-  fullBleed?: boolean;
 }>) {
   const [showSidebar, setShowSidebar] = useState(false);
-
-  const cardClassName = fullBleed
-    ? "flex grow flex-col"
-    : "flex grow flex-col p-6 lg:rounded-lg lg:bg-white lg:p-10 lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10";
-  const contentClassName = fullBleed
-    ? "flex w-full flex-1 flex-col"
-    : "mx-auto flex w-full max-w-6xl flex-1 flex-col";
 
   return (
     <div className="relative isolate flex min-h-svh w-full bg-white max-lg:flex-col lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
@@ -97,8 +84,10 @@ export function SidebarLayout({
       {/* Content — a full-height flex column so pages may stretch to fill
           (e.g. the dictation editor). Short pages still flow from the top. */}
       <main className="flex flex-1 flex-col pb-2 lg:min-w-0 lg:pt-2 lg:pr-2 lg:pl-64">
-        <div className={cardClassName}>
-          <div className={contentClassName}>{children}</div>
+        <div className="flex grow flex-col p-6 lg:rounded-lg lg:bg-white lg:p-10 lg:shadow-xs lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10">
+          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
+            {children}
+          </div>
         </div>
       </main>
     </div>

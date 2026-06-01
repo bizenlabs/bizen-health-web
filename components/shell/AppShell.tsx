@@ -144,11 +144,6 @@ export function AppShell({
     (m) => m.organizationId !== currentOrgId && m.status === "active",
   );
 
-  // The dictation editor (a single dictation, not the list or /new) goes
-  // edge-to-edge — no centered cap, no card chrome — since it brings its own.
-  const fullBleed =
-    /^\/dictation\/[^/]+$/.test(pathname) && pathname !== "/dictation/new";
-
   function handleSwitchOrg(organizationId: string, organizationName: string) {
     setPendingOrgName(organizationName);
     startTransition(async () => {
@@ -163,7 +158,6 @@ export function AppShell({
     <>
       <OrgSwitchingOverlay orgName={isPending ? pendingOrgName : null} />
       <SidebarLayout
-        fullBleed={fullBleed}
         navbar={
           <Navbar>
             <NavbarSpacer />
