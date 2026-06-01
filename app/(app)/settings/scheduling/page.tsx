@@ -43,7 +43,7 @@ export default async function SchedulingPage({
   }
 
   return (
-    <div className="px-6 py-10">
+    <div>
       <h1 className="text-2xl font-semibold">Scheduling</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Configure each provider&apos;s weekly availability and generate the

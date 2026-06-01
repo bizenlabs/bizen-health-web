@@ -1,3 +1,9 @@
+import {
+  DescriptionDetails,
+  DescriptionList,
+  DescriptionTerm,
+} from "@/components/catalyst/description-list";
+import { Divider } from "@/components/catalyst/divider";
 import { OrgNameForm } from "./OrgNameForm";
 
 type Props = {
@@ -8,21 +14,6 @@ type Props = {
   isAdmin: boolean;
 };
 
-function ReadOnlyField({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null;
-}) {
-  return (
-    <div>
-      <div className="text-xs text-zinc-500">{label}</div>
-      <div className="mt-1 font-mono text-sm">{value ?? "—"}</div>
-    </div>
-  );
-}
-
 export function GeneralSection({
   orgName,
   tenantSlug,
@@ -31,24 +22,35 @@ export function GeneralSection({
   isAdmin,
 }: Props) {
   return (
-    <section className="mt-8">
-      <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-        General
-      </h2>
-
+    <div className="mt-8">
       {isAdmin ? (
-        <OrgNameForm initialName={orgName} />
-      ) : (
-        <div className="mt-3">
-          <ReadOnlyField label="Workspace name" value={orgName} />
-        </div>
-      )}
+        <>
+          <OrgNameForm initialName={orgName} />
+          <Divider soft className="my-8" />
+        </>
+      ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <ReadOnlyField label="Slug" value={tenantSlug} />
-        <ReadOnlyField label="Account type" value={orgType} />
-        <ReadOnlyField label="Organization ID" value={organizationId} />
-      </div>
-    </section>
+      <DescriptionList>
+        {!isAdmin ? (
+          <>
+            <DescriptionTerm>Workspace name</DescriptionTerm>
+            <DescriptionDetails>{orgName}</DescriptionDetails>
+          </>
+        ) : null}
+
+        <DescriptionTerm>Slug</DescriptionTerm>
+        <DescriptionDetails>{tenantSlug ?? "—"}</DescriptionDetails>
+
+        <DescriptionTerm>Account type</DescriptionTerm>
+        <DescriptionDetails className="capitalize">
+          {orgType ?? "—"}
+        </DescriptionDetails>
+
+        <DescriptionTerm>Organization ID</DescriptionTerm>
+        <DescriptionDetails>
+          <span className="font-mono text-xs">{organizationId}</span>
+        </DescriptionDetails>
+      </DescriptionList>
+    </div>
   );
 }

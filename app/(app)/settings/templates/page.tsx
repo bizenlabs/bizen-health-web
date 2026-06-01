@@ -9,9 +9,5 @@ export default async function TemplatesPage() {
   // client-side, so the page stays a single round trip.
   const templates = await listTemplates(true);
 
-  return (
-    <div className="px-6 py-10">
-      <TemplateBrowser templates={templates} />
-    </div>
-  );
+  return <TemplateBrowser templates={templates} />;
 }
