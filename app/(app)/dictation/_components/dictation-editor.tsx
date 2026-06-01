@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
+  ChevronLeftIcon,
   DocumentTextIcon,
   MicrophoneIcon,
   PauseIcon,
@@ -30,6 +32,8 @@ import {
   type AudioInputDevice,
   useAudioDevices,
 } from "@/lib/transcription/use-audio-devices";
+import { DictationDeleteButton } from "./dictation-delete-button";
+import { DictationTitle } from "./dictation-title";
 import { TemplateHint } from "./template-hint-extension";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
@@ -123,6 +127,8 @@ function joinSegments(segs: { text: string }[]): string {
 
 export function DictationEditor({
   transcriptionId,
+  title,
+  startedAtLabel,
   templateId,
   templateName,
   templateContent,
@@ -133,6 +139,10 @@ export function DictationEditor({
   autoRecord,
 }: {
   transcriptionId: string;
+  // The dictation's name and a preformatted started-at timestamp — rendered in
+  // the editor's own header so the recording controls sit inline with them.
+  title: string | null;
+  startedAtLabel: string;
   templateId: string | null;
   templateName: string | null;
   // The template's Markdown scaffold — shown above the transcript so the
@@ -565,8 +575,108 @@ export function DictationEditor({
         </p>
       ) : null}
 
-      {/* Header — status readout + primary action */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Page header — dictation name and the recording controls share one
+          line, with the timestamp beneath. */}
+      <header className="shrink-0">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <Link
+              href="/dictation"
+              className="inline-flex items-center gap-1 font-mono text-[11px] font-medium tracking-[0.15em] text-zinc-400 uppercase transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+            >
+              <ChevronLeftIcon className="size-3.5" />
+              Dictation
+            </Link>
+            <DictationTitle
+              transcriptionId={transcriptionId}
+              title={title}
+              fallbackLabel={templateName ?? "Free-form dictation"}
+              editable={!voided}
+            />
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3">
+            {recording ? (
+              <>
+                <MicPicker
+                  devices={devices}
+                  selectedDeviceId={selectedDeviceId}
+                  hasLabels={hasLabels}
+                  onChange={handleDeviceChange}
+                  disabled={state === "starting"}
+                  showSingle
+                />
+                {paused ? (
+                  <button
+                    type="button"
+                    onClick={handleSessionResume}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                  >
+                    <PlayIcon aria-hidden="true" className="size-4" />
+                    Resume
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={pause}
+                    disabled={state === "starting"}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  >
+                    <PauseIcon aria-hidden="true" className="size-4" />
+                    Pause
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleStop()}
+                  disabled={state === "starting"}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
+                >
+                  <StopIcon aria-hidden="true" className="size-4" />
+                  {state === "starting" ? "Starting…" : "Stop"}
+                </button>
+              </>
+            ) : phase === "editing" ? (
+              <>
+                <MicPicker
+                  devices={devices}
+                  selectedDeviceId={selectedDeviceId}
+                  hasLabels={hasLabels}
+                  onChange={handleDeviceChange}
+                  disabled={resuming}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleResume()}
+                  disabled={resuming}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                >
+                  <MicrophoneIcon aria-hidden="true" className="size-4" />
+                  {resuming ? "Resuming…" : "Resume recording"}
+                </button>
+              </>
+            ) : null}
+
+            {/* No delete control mid-recording — the session must be stopped
+                first; afterwards it can be deleted (and restored) freely. */}
+            {recording ? null : (
+              <DictationDeleteButton
+                transcriptionId={transcriptionId}
+                voided={voided}
+              />
+            )}
+          </div>
+        </div>
+        <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+          {startedAtLabel}
+        </p>
+      </header>
+
+      {/* Divider between the header and the note surface */}
+      <hr className="mt-4 border-t border-zinc-200 dark:border-zinc-800" />
+
+      {/* Status strip — recording state, note format, save status */}
+      <div className="flex items-center justify-between gap-3 pt-3">
         <span className="flex items-center gap-2">
           <span
             className={clsx(
@@ -589,80 +699,18 @@ export function DictationEditor({
           </span>
         </span>
 
-        {recording ? (
-          <span className="flex items-center gap-2">
-            <MicPicker
-              devices={devices}
-              selectedDeviceId={selectedDeviceId}
-              hasLabels={hasLabels}
-              onChange={handleDeviceChange}
-              disabled={state === "starting"}
-              showSingle
-            />
-            {paused ? (
-              <button
-                type="button"
-                onClick={handleSessionResume}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-              >
-                <PlayIcon aria-hidden="true" className="size-4" />
-                Resume
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={pause}
-                disabled={state === "starting"}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-              >
-                <PauseIcon aria-hidden="true" className="size-4" />
-                Pause
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleStop()}
-              disabled={state === "starting"}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
-            >
-              <StopIcon aria-hidden="true" className="size-4" />
-              {state === "starting" ? "Starting…" : "Stop"}
-            </button>
+        <span className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 font-mono text-[11px] tracking-wide text-zinc-400 dark:text-zinc-500">
+            <TemplateGlyph aria-hidden="true" className="size-3.5" />
+            {templateName ?? "Free-form dictation"}
           </span>
-        ) : (
-          <span className="flex items-center gap-3">
-            {phase === "editing" ? (
-              <>
-                <MicPicker
-                  devices={devices}
-                  selectedDeviceId={selectedDeviceId}
-                  hasLabels={hasLabels}
-                  onChange={handleDeviceChange}
-                  disabled={resuming}
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleResume()}
-                  disabled={resuming}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-                >
-                  <MicrophoneIcon aria-hidden="true" className="size-4" />
-                  {resuming ? "Resuming…" : "Resume recording"}
-                </button>
-              </>
-            ) : null}
+          {phase === "editing" ? (
             <span className="font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
               {saveLabel(saveStatus)}
             </span>
-          </span>
-        )}
+          ) : null}
+        </span>
       </div>
-
-      {/* Note format */}
-      <p className="flex items-center gap-1.5 pt-2 font-mono text-[11px] tracking-wide text-zinc-400 dark:text-zinc-500">
-        <TemplateGlyph aria-hidden="true" className="size-3.5" />
-        {templateName ?? "Free-form dictation"}
-      </p>
 
       {error || resumeError ? (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
