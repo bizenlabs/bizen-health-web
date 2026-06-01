@@ -36,7 +36,6 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         organizationName: m.organizationName,
         status: m.status,
       }))}
-      isTenantAdmin={session.role === "tenant_admin"}
       user={{ name: fullName, email: user.email }}
     >
       {children}

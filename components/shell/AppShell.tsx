@@ -48,7 +48,6 @@ import {
   Cog6ToothIcon,
   HomeIcon,
   MicrophoneIcon,
-  UserGroupIcon,
   UsersIcon,
 } from "@heroicons/react/20/solid";
 
@@ -62,7 +61,6 @@ type Props = {
   currentOrgId: string;
   currentOrgName: string;
   memberships: Membership[];
-  isTenantAdmin: boolean;
   user: {
     name: string;
     email: string;
@@ -132,7 +130,6 @@ export function AppShell({
   currentOrgId,
   currentOrgName,
   memberships,
-  isTenantAdmin,
   user,
   children,
 }: Props) {
@@ -249,15 +246,6 @@ export function AppShell({
                   <MicrophoneIcon />
                   <SidebarLabel>Dictation</SidebarLabel>
                 </SidebarItem>
-                {isTenantAdmin ? (
-                  <SidebarItem
-                    href="/settings/team"
-                    current={pathname.startsWith("/settings/team")}
-                  >
-                    <UserGroupIcon />
-                    <SidebarLabel>Team</SidebarLabel>
-                  </SidebarItem>
-                ) : null}
               </SidebarSection>
 
               <SidebarSpacer />
