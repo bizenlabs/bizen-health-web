@@ -1,33 +1,9 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import {
-  listRefItems,
-  type RefItem,
-  type RegisterKey,
-} from "@/lib/reference-data";
+import { listRefItems } from "@/lib/reference-data";
 import { RefDataManager } from "./_components/ref-data-manager";
-
-type Register = {
-  key: RegisterKey;
-  title: string;
-  singular: string;
-  blurb: string;
-};
-
-const REGISTERS: Register[] = [
-  {
-    key: "visit-types",
-    title: "Visit types",
-    singular: "visit type",
-    blurb: "Why a patient came in — chosen once, when a visit is opened.",
-  },
-  {
-    key: "encounter-types",
-    title: "Encounter types",
-    singular: "encounter type",
-    blurb: "The kind of clinical interaction recorded inside a visit.",
-  },
-];
+import { RegisterRail } from "./_components/register-rail";
+import { REGISTERS, resolveRegister } from "./_registers";
 
 function one(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
@@ -38,10 +14,17 @@ export default async function ReferenceDataPage({
 }: PageProps<"/settings/reference-data">) {
   await requireRole("tenant_admin", "super_admin");
 
-  const showRetired = one((await searchParams).includeRetired) === "true";
-  const items = await Promise.all(
-    REGISTERS.map((register) => listRefItems(register.key, showRetired)),
-  );
+  const sp = await searchParams;
+  const showRetired = one(sp.includeRetired) === "true";
+  const active = resolveRegister(one(sp.register));
+
+  // Only the selected register is fetched — adding registers doesn't grow the
+  // per-load cost.
+  const items = await listRefItems(active.key, showRetired);
+
+  const retiredHref = `/settings/reference-data?register=${active.key}${
+    showRetired ? "" : "&includeRetired=true"
+  }`;
 
   return (
     <div>
@@ -51,49 +34,32 @@ export default async function ReferenceDataPage({
         workspace is created and is yours to curate.
       </p>
 
-      <div className="mt-4 flex justify-end">
-        <Link
-          href={
-            showRetired
-              ? "/settings/reference-data"
-              : "/settings/reference-data?includeRetired=true"
-          }
-          className="text-sm text-zinc-500 hover:text-zinc-700 hover:underline dark:hover:text-zinc-300"
-        >
-          {showRetired ? "Hide retired" : "Show retired"}
-        </Link>
+      <div className="mt-8 grid gap-8 md:grid-cols-[200px_1fr]">
+        <RegisterRail registers={REGISTERS} active={active.key} />
+
+        <section>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-zinc-950 dark:text-white">
+                {active.title}
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">{active.blurb}</p>
+            </div>
+            <Link
+              href={retiredHref}
+              className="shrink-0 text-sm text-zinc-500 hover:text-zinc-700 hover:underline dark:hover:text-zinc-300"
+            >
+              {showRetired ? "Hide retired" : "Show retired"}
+            </Link>
+          </div>
+
+          <RefDataManager
+            registerKey={active.key}
+            singular={active.singular}
+            items={items}
+          />
+        </section>
       </div>
-
-      {REGISTERS.map((register, index) => (
-        <RegisterSection
-          key={register.key}
-          register={register}
-          items={items[index]}
-        />
-      ))}
     </div>
-  );
-}
-
-function RegisterSection({
-  register,
-  items,
-}: {
-  register: Register;
-  items: RefItem[];
-}) {
-  return (
-    <section className="mt-10 first-of-type:mt-8">
-      <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-        {register.title}
-      </h2>
-      <p className="mt-1 text-sm text-zinc-500">{register.blurb}</p>
-
-      <RefDataManager
-        registerKey={register.key}
-        singular={register.singular}
-        items={items}
-      />
-    </section>
   );
 }
