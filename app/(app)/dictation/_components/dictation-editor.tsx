@@ -974,7 +974,7 @@ function ToolBtn({
       >
         <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} />
       </button>
-      <span className="pointer-events-none absolute top-full left-1/2 z-20 mt-1.5 flex -translate-x-1/2 items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100 dark:bg-zinc-700">
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 flex -translate-x-1/2 items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100 dark:bg-zinc-700">
         {label}
         {shortcut ? (
           <kbd className="rounded border border-white/20 px-1 font-sans text-[10px] text-zinc-300">
