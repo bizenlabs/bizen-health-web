@@ -4,8 +4,6 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowUturnLeftIcon,
-  ArrowUturnRightIcon,
   ChevronLeftIcon,
   DocumentTextIcon,
   MicrophoneIcon,
@@ -14,10 +12,26 @@ import {
   PlayIcon,
   StopIcon,
 } from "@heroicons/react/20/solid";
+import {
+  Bold,
+  Check,
+  Copy,
+  Heading1,
+  Heading2,
+  Heading3,
+  Italic,
+  List,
+  ListOrdered,
+  type LucideIcon,
+  Redo2,
+  Underline as UnderlineIcon,
+  Undo2,
+} from "lucide-react";
 import clsx from "clsx";
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Underline from "@tiptap/extension-underline";
 import { Markdown } from "@tiptap/markdown";
 import { EditorState } from "@tiptap/pm/state";
 import {
@@ -245,6 +259,7 @@ export function DictationEditor({
   const editor = useEditor({
     extensions: [
       StarterKit,
+      Underline,
       Markdown,
       Placeholder.configure({
         placeholder: "Your dictated note will appear here…",
@@ -808,97 +823,165 @@ function saveLabel(status: SaveStatus): string {
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    };
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(editor.getMarkdown());
+      setCopied(true);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable (e.g. insecure context) — silently no-op */
+    }
+  }, [editor]);
+
+  // Display platform-appropriate shortcut hints in tooltips.
+  const isMac =
+    typeof navigator !== "undefined" &&
+    /Mac|iP(hone|ad|od)/.test(navigator.platform);
+  const mod = isMac ? "⌘" : "Ctrl+";
+  const shift = isMac ? "⇧" : "Shift+";
+  const alt = isMac ? "⌥" : "Alt+";
+
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-1 border-y border-zinc-100 py-1.5 dark:border-zinc-800/80">
+    <div className="mt-4 flex flex-wrap items-center gap-0.5 border-y border-zinc-100 py-1.5 dark:border-zinc-800/80">
       <ToolBtn
-        label="B"
-        bold
+        icon={Bold}
+        label="Bold"
+        shortcut={`${mod}B`}
         active={editor.isActive("bold")}
         onClick={() => editor.chain().focus().toggleBold().run()}
       />
       <ToolBtn
-        label="I"
-        italic
+        icon={Italic}
+        label="Italic"
+        shortcut={`${mod}I`}
         active={editor.isActive("italic")}
         onClick={() => editor.chain().focus().toggleItalic().run()}
       />
+      <ToolBtn
+        icon={UnderlineIcon}
+        label="Underline"
+        shortcut={`${mod}U`}
+        active={editor.isActive("underline")}
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+      />
       <ToolSep />
       <ToolBtn
-        label="H1"
+        icon={Heading1}
+        label="Heading 1"
+        shortcut={`${mod}${alt}1`}
         active={editor.isActive("heading", { level: 1 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
       />
       <ToolBtn
-        label="H2"
+        icon={Heading2}
+        label="Heading 2"
+        shortcut={`${mod}${alt}2`}
         active={editor.isActive("heading", { level: 2 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
       />
+      <ToolBtn
+        icon={Heading3}
+        label="Heading 3"
+        shortcut={`${mod}${alt}3`}
+        active={editor.isActive("heading", { level: 3 })}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+      />
       <ToolSep />
       <ToolBtn
-        label="•"
+        icon={List}
+        label="Bullet list"
+        shortcut={`${mod}${shift}8`}
         active={editor.isActive("bulletList")}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
       />
       <ToolBtn
-        label="1."
+        icon={ListOrdered}
+        label="Numbered list"
+        shortcut={`${mod}${shift}7`}
         active={editor.isActive("orderedList")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
       />
       <ToolSep />
       <ToolBtn
-        label={<ArrowUturnLeftIcon aria-hidden="true" className="size-3.5" />}
-        ariaLabel="Undo"
+        icon={Undo2}
+        label="Undo"
+        shortcut={`${mod}Z`}
         disabled={!editor.can().undo()}
         onClick={() => editor.chain().focus().undo().run()}
       />
       <ToolBtn
-        label={<ArrowUturnRightIcon aria-hidden="true" className="size-3.5" />}
-        ariaLabel="Redo"
+        icon={Redo2}
+        label="Redo"
+        shortcut={`${mod}${shift}Z`}
         disabled={!editor.can().redo()}
         onClick={() => editor.chain().focus().redo().run()}
       />
+      <div className="ml-auto">
+        <ToolBtn
+          icon={copied ? Check : Copy}
+          label={copied ? "Copied" : "Copy note"}
+          active={copied}
+          onClick={handleCopy}
+        />
+      </div>
     </div>
   );
 }
 
 function ToolSep() {
-  return <span className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />;
+  return <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />;
 }
 
 function ToolBtn({
+  icon: Icon,
   label,
-  ariaLabel,
+  shortcut,
   active = false,
-  bold = false,
-  italic = false,
   disabled = false,
   onClick,
 }: {
-  label: React.ReactNode;
-  ariaLabel?: string;
+  icon: LucideIcon;
+  label: string;
+  shortcut?: string;
   active?: boolean;
-  bold?: boolean;
-  italic?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-      className={clsx(
-        "flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-xs transition-colors disabled:opacity-30",
-        bold && "font-bold",
-        italic && "font-serif italic",
-        active
-          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-          : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
-      )}
-    >
-      {label}
-    </button>
+    <div className="group relative">
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        disabled={disabled}
+        onClick={onClick}
+        className={clsx(
+          "flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-30",
+          active
+            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+            : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
+        )}
+      >
+        <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} />
+      </button>
+      <span className="pointer-events-none absolute top-full left-1/2 z-20 mt-1.5 flex -translate-x-1/2 items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100 dark:bg-zinc-700">
+        {label}
+        {shortcut ? (
+          <kbd className="rounded border border-white/20 px-1 font-sans text-[10px] text-zinc-300">
+            {shortcut}
+          </kbd>
+        ) : null}
+      </span>
+    </div>
   );
 }
