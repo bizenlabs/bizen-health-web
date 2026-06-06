@@ -47,6 +47,7 @@ import {
   useAudioDevices,
 } from "@/lib/transcription/use-audio-devices";
 import { DictationDeleteButton } from "./dictation-delete-button";
+import { DictationExportMenu } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
 import { TemplateHint } from "./template-hint-extension";
 
@@ -760,7 +761,11 @@ export function DictationEditor({
 
       {/* Toolbar — editable note view only (editing or paused) */}
       {(phase === "editing" || paused) && editor && activeTab === "note" ? (
-        <Toolbar editor={editor} />
+        <Toolbar
+          editor={editor}
+          documentTitle={title ?? templateName ?? "Free-form dictation"}
+          documentSubtitle={startedAtLabel}
+        />
       ) : !showTabs ? (
         <div className="mt-4" />
       ) : null}
@@ -906,7 +911,15 @@ function saveLabel(status: SaveStatus): string {
   }
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({
+  editor,
+  documentTitle,
+  documentSubtitle,
+}: {
+  editor: Editor;
+  documentTitle: string;
+  documentSubtitle?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1011,13 +1024,19 @@ function Toolbar({ editor }: { editor: Editor }) {
         disabled={!editor.can().redo()}
         onClick={() => editor.chain().focus().redo().run()}
       />
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-0.5">
         <ToolBtn
           icon={copied ? Check : Copy}
           label={copied ? "Copied" : "Copy note"}
           align="right"
           active={copied}
           onClick={handleCopy}
+        />
+        <DictationExportMenu
+          editor={editor}
+          title={documentTitle}
+          subtitle={documentSubtitle}
+          disabled={editor.isEmpty}
         />
       </div>
     </div>
