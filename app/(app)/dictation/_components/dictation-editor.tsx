@@ -189,6 +189,9 @@ export function DictationEditor({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  // Which pane the review view shows once recording has stopped: the editable
+  // note, or the read-only raw transcript.
+  const [activeTab, setActiveTab] = useState<"note" | "transcript">("note");
 
   // `phase` is derived, not stored — it has no transition the user can't
   // express as "voided / recording done / still recording". A paused session
@@ -359,18 +362,15 @@ export function DictationEditor({
         contentType: "markdown",
         emitUpdate: false,
       });
-    } else if (templateBody && transcriptBody) {
-      // Pre-save state with raw transcript collected — show both.
-      editor.commands.setContent(`${templateBody}\n\n${transcriptBody}`, {
-        contentType: "markdown",
-        emitUpdate: false,
-      });
     } else if (templateBody) {
+      // Seed just the template scaffold. The raw dictation is NOT dumped into
+      // the note — it's available read-only in the Transcript tab.
       editor.commands.setContent(templateBody, {
         contentType: "markdown",
         emitUpdate: false,
       });
     } else if (transcriptBody) {
+      // Free-form: the note *is* the transcript, so seed it directly.
       editor.commands.setContent(transcriptBody, {
         contentType: "markdown",
         emitUpdate: false,
@@ -499,6 +499,10 @@ export function DictationEditor({
 
   const recording =
     state === "starting" || state === "recording" || state === "paused";
+
+  // The Note/Transcript tabs surface only once recording has stopped and there
+  // is a raw transcript worth showing.
+  const showTabs = !recording && transcriptText.trim().length > 0;
 
   async function handleStop() {
     const result = await stop();
@@ -733,21 +737,101 @@ export function DictationEditor({
         </p>
       ) : null}
 
-      {/* Toolbar — whenever the editor is editable (editing or paused) */}
-      {(phase === "editing" || paused) && editor ? (
-        <Toolbar editor={editor} />
-      ) : (
-        <div className="mt-4" />
-      )}
+      {/* Note / Transcript tabs — only after recording has stopped */}
+      {showTabs ? (
+        <div
+          role="tablist"
+          className="mt-4 flex gap-x-6 border-b border-zinc-200 text-sm font-semibold dark:border-zinc-800"
+        >
+          <TabBtn
+            active={activeTab === "note"}
+            onClick={() => setActiveTab("note")}
+          >
+            Note
+          </TabBtn>
+          <TabBtn
+            active={activeTab === "transcript"}
+            onClick={() => setActiveTab("transcript")}
+          >
+            Transcript
+          </TabBtn>
+        </div>
+      ) : null}
 
-      {/* Editor body — fills the remaining height, scrolls within. */}
+      {/* Toolbar — editable note view only (editing or paused) */}
+      {(phase === "editing" || paused) && editor && activeTab === "note" ? (
+        <Toolbar editor={editor} />
+      ) : !showTabs ? (
+        <div className="mt-4" />
+      ) : null}
+
+      {/* Body — fills the remaining height, scrolls within. The editor stays
+          mounted and is hidden on the Transcript tab so its state survives the
+          switch; the raw transcript renders read-only alongside it. */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto pb-2">
         {editor ? (
-          <EditorContent editor={editor} />
+          <>
+            <div className={clsx(showTabs && activeTab !== "note" && "hidden")}>
+              <EditorContent editor={editor} />
+            </div>
+            {showTabs && activeTab === "transcript" ? (
+              <TranscriptPane text={transcriptText} />
+            ) : null}
+          </>
         ) : (
           <div className="h-24 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800/60" />
         )}
       </div>
+    </div>
+  );
+}
+
+// A single Note/Transcript tab. Local state, not routing — so styled inline
+// rather than reusing the route-based SettingsTabs.
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={clsx(
+        "-mb-px border-b-2 py-2.5 whitespace-nowrap transition-colors",
+        active
+          ? "border-blue-500 text-zinc-950 dark:border-blue-400 dark:text-white"
+          : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Read-only view of the raw, unedited dictation transcript.
+function TranscriptPane({ text }: { text: string }) {
+  const trimmed = text.trim();
+  return (
+    <div className="pt-4">
+      <p className="mb-2 font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+        Raw transcript — unedited
+      </p>
+      {trimmed ? (
+        <p className="text-sm leading-relaxed whitespace-pre-wrap text-zinc-600 dark:text-zinc-300">
+          {trimmed}
+        </p>
+      ) : (
+        <p className="text-sm text-zinc-400 italic dark:text-zinc-500">
+          No transcript was captured for this dictation.
+        </p>
+      )}
     </div>
   );
 }
