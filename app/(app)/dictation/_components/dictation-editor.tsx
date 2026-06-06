@@ -857,6 +857,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         icon={Bold}
         label="Bold"
         shortcut={`${mod}B`}
+        align="left"
         active={editor.isActive("bold")}
         onClick={() => editor.chain().focus().toggleBold().run()}
       />
@@ -930,6 +931,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         <ToolBtn
           icon={copied ? Check : Copy}
           label={copied ? "Copied" : "Copy note"}
+          align="right"
           active={copied}
           onClick={handleCopy}
         />
@@ -948,6 +950,7 @@ function ToolBtn({
   shortcut,
   active = false,
   disabled = false,
+  align = "center",
   onClick,
 }: {
   icon: LucideIcon;
@@ -955,6 +958,9 @@ function ToolBtn({
   shortcut?: string;
   active?: boolean;
   disabled?: boolean;
+  // Tooltip horizontal anchor. Edge buttons anchor to their own edge so the
+  // bubble doesn't overhang the toolbar and get clipped by side containers.
+  align?: "left" | "center" | "right";
   onClick: () => void;
 }) {
   return (
@@ -974,7 +980,14 @@ function ToolBtn({
       >
         <Icon aria-hidden="true" className="size-4" strokeWidth={2.25} />
       </button>
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 flex -translate-x-1/2 items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100 dark:bg-zinc-700">
+      <span
+        className={clsx(
+          "pointer-events-none absolute bottom-full z-30 mb-1.5 flex items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-white opacity-0 shadow-md transition-opacity duration-100 group-hover:opacity-100 dark:bg-zinc-700",
+          align === "left" && "left-0",
+          align === "center" && "left-1/2 -translate-x-1/2",
+          align === "right" && "right-0",
+        )}
+      >
         {label}
         {shortcut ? (
           <kbd className="rounded border border-white/20 px-1 font-sans text-[10px] text-zinc-300">
