@@ -597,7 +597,7 @@ export function DictationEditor({
       {/* Page header — dictation name and the recording controls share one
           line, with the timestamp beneath. */}
       <header className="shrink-0">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <Link
               href="/dictation"
@@ -614,7 +614,7 @@ export function DictationEditor({
             />
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
             {recording ? (
               <>
                 <MicPicker
@@ -671,7 +671,7 @@ export function DictationEditor({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
                 >
                   <MicrophoneIcon aria-hidden="true" className="size-4" />
-                  {resuming ? "Resuming…" : "Resume recording"}
+                  {resuming ? "Resuming…" : "Resume"}
                 </button>
               </>
             ) : null}
