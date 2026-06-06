@@ -62,7 +62,8 @@ export default async function DictationDetailPage({
     <div className="flex w-full flex-1 flex-col">
       {/* The editor owns its own header (name, controls, timestamp) so the
           recording controls sit inline with the heading. It fills the
-          remaining height. */}
+          remaining height. The raw transcript is surfaced inside the editor
+          via its Note/Transcript tab switch — no separate page section. */}
       <div className="flex min-h-0 flex-1 flex-col">
         <DictationEditor
           key={recordParam ?? "editing"}
@@ -79,19 +80,6 @@ export default async function DictationDetailPage({
           autoRecord={autoRecord}
         />
       </div>
-
-      {/* The immutable transcript record — kept distinct from the curated
-          note. Hidden during a fresh recording (the editor shows it live). */}
-      {transcriptText && !autoRecord ? (
-        <section className="mt-6 shrink-0">
-          <h2 className="font-mono text-[10px] font-medium tracking-[0.2em] text-zinc-400 uppercase dark:text-zinc-500">
-            Raw transcript
-          </h2>
-          <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 text-sm leading-relaxed whitespace-pre-wrap text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">
-            {transcriptText}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }
