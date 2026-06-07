@@ -11,25 +11,25 @@ add a short note (PR #, decision) when a line moves.
 
 ## Tier 1 — Recording trust (highest value)
 
-Confirmed absent in the live recording shell.
+Confirmed absent in the live recording shell. **All four done** — type-checks
+and lints clean; visual verification still pending a live recording session
+(mic + Deepgram, not reproducible headlessly).
 
-- [ ] **Elapsed-time timer while recording.** Today recording shows only a
-      pulsing red dot + "RECORDING" (status strip, `dictation-editor.tsx:731-752`).
-      Add a running `mm:ss`. Most-expected affordance in any dictation tool.
-- [ ] **Live audio-level / VU meter.** Nothing signals the mic is actually
-      capturing — the #1 real-world dictation failure (dead/wrong mic). A small
-      live level bar next to the mic control turns "is this on?" into instant
-      confidence.
-- [ ] **Show the active mic name during recording.** In the live recording
-      state there was _no_ mic indicator — `MicPicker` renders nothing when the
-      device is unlabeled/single (`dictation-editor.tsx:898-908`). A clinician
-      mid-dictation can't confirm which input is live.
-- [ ] **Surface the section-targeting feature.** Dictation correctly lands in
-      the targeted section (`insertPosRef`, `dictation-editor.tsx:449-503`), but
-      nothing tells the user _where_ the next words will go, and the editor is
-      read-only while recording so they can't click to retarget. Add a
-      "Dictating into: _<section>_" marker and a "Pause → click a section →
-      Resume" hint.
+- [x] **Elapsed-time timer while recording.** Added `useElapsed` (counts active
+      recording, freezes on pause, resumes from where it left off) +
+      `formatDuration`; rendered as `mm:ss` in the status strip next to
+      "RECORDING".
+- [x] **Live audio-level / VU meter.** `audio-capture.ts` now computes a
+      smoothed RMS off each PCM frame and exposes `getLevel()` (surfaced through
+      `useTranscription`); new `LevelMeter` lights bars via rAF (no per-frame
+      render) beside the mic control while recording.
+- [x] **Show the active mic name during recording.** `MicPicker` (showSingle)
+      always names the live input while recording, falling back to "Default
+      microphone" before labels resolve instead of rendering nothing.
+- [x] **Surface the section-targeting feature.** `sectionLabelAt` derives the
+      nearest heading above `insertPos`; the status strip shows
+      "→ <section>" while recording. _Follow-up:_ the "Pause → click a section →
+      Resume" hint text is not yet added.
 
 ## Tier 2 — Save integrity (clinical data safety)
 

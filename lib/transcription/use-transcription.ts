@@ -62,6 +62,9 @@ export interface UseTranscriptionResult {
   // intact. A no-op unless a session is live.
   switchDevice: (deviceId: string | null) => Promise<void>;
   stop: () => Promise<TranscriptionDetail | null>;
+  // Current input loudness in [0, 1] — read on an animation frame to drive the
+  // live level meter. Stable identity; safe to depend on.
+  getLevel: () => number;
 }
 
 const FLUSH_BATCH = 5;
@@ -330,6 +333,10 @@ export function useTranscription(): UseTranscriptionResult {
     return null;
   }, [flush, teardown]);
 
+  // Read straight off the capture each frame — no state, no re-render. Returns
+  // 0 whenever nothing is capturing.
+  const getLevel = useCallback(() => captureRef.current?.getLevel() ?? 0, []);
+
   // Tear down capture + socket if the component unmounts mid-recording.
   // A client-side navigation away never calls stop(), so without this the
   // backend session would be stranded IN_PROGRESS forever. Implicitly finalise
@@ -368,5 +375,6 @@ export function useTranscription(): UseTranscriptionResult {
     resume,
     switchDevice,
     stop,
+    getLevel,
   };
 }

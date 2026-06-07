@@ -130,6 +130,22 @@ function joinSegments(segs: { text: string }[]): string {
     .join(" ");
 }
 
+/** Text of the nearest heading at or above `pos` — the section `pos` sits in. */
+function sectionLabelAt(editor: Editor, pos: number): string | null {
+  let label: string | null = null;
+  editor.state.doc.descendants((node, nodePos) => {
+    // Headings appear in document order, so the last one before `pos` is the
+    // nearest preceding section. Stop descending into nodes past `pos`.
+    if (nodePos >= pos) return false;
+    if (node.type.name === "heading") {
+      const text = node.textContent.trim();
+      if (text) label = text;
+    }
+    return true;
+  });
+  return label;
+}
+
 export function DictationEditor({
   transcriptionId,
   title,
@@ -172,6 +188,7 @@ export function DictationEditor({
     resume,
     switchDevice,
     stop,
+    getLevel,
   } = useTranscription();
   const { devices, selectedDeviceId, setSelectedDeviceId, hasLabels } =
     useAudioDevices();
@@ -183,6 +200,9 @@ export function DictationEditor({
   // Which pane the review view shows once recording has stopped: the editable
   // note, or the read-only raw transcript.
   const [activeTab, setActiveTab] = useState<"note" | "transcript">("note");
+  // The heading of the section dictation is currently landing in — shown while
+  // recording so the clinician can see where the next utterances will go.
+  const [activeSection, setActiveSection] = useState<string | null>(null);
 
   // `phase` is derived, not stored — it has no transition the user can't
   // express as "voided / recording done / still recording". A paused session
@@ -195,6 +215,10 @@ export function DictationEditor({
       : "recording";
 
   const paused = state === "paused";
+
+  // Active-recording elapsed time — counts while the mic is live, freezes (not
+  // resets) on pause, and resumes from where it left off.
+  const elapsedMs = useElapsed(state === "recording");
 
   // Reflect the mic carried over from intake (or a previous sitting) in the
   // picker once the browser hands back real device labels — but only if it's
@@ -502,6 +526,18 @@ export function DictationEditor({
     }
   }, [editor, phase, segments, partial]);
 
+  // Track which section the insertion point sits in so the status strip can
+  // show "Dictating into <section>". Runs after the stream effect above has
+  // advanced insertPos (same deps, declared later → fires after it), and on
+  // pause, where the caret can be repositioned to redirect the next utterances.
+  useEffect(() => {
+    if (!editor || phase !== "recording" || insertPosRef.current === null) {
+      return;
+    }
+    const label = sectionLabelAt(editor, insertPosRef.current);
+    setActiveSection((prev) => (prev === label ? prev : label));
+  }, [editor, phase, paused, segments, partial]);
+
   // Editable while editing, and while *paused* — a paused session mutes the
   // mic, so manual edits and cursor moves are safe and can't collide with the
   // (stopped) stream. Only an actively recording editor stays read-only. The
@@ -650,6 +686,10 @@ export function DictationEditor({
           <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
             {recording ? (
               <>
+                <LevelMeter
+                  getLevel={getLevel}
+                  active={state === "recording"}
+                />
                 <MicPicker
                   devices={devices}
                   selectedDeviceId={selectedDeviceId}
@@ -749,6 +789,17 @@ export function DictationEditor({
                   ? "Deleted"
                   : "Note"}
           </span>
+          {recording ? (
+            <span className="font-mono text-[10px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500">
+              {formatDuration(elapsedMs)}
+            </span>
+          ) : null}
+          {recording && activeSection ? (
+            <span className="hidden items-center gap-1 text-[10px] tracking-wide text-zinc-400 sm:flex dark:text-zinc-500">
+              <span aria-hidden="true">→</span>
+              <span className="max-w-[12rem] truncate">{activeSection}</span>
+            </span>
+          ) : null}
         </span>
 
         <span className="flex items-center gap-3">
@@ -896,7 +947,11 @@ function MicPicker({
   const canPick = hasLabels && devices.length > 1;
 
   if (!canPick) {
-    if (!showSingle || devices.length === 0) return null;
+    // `showSingle` (recording) always names the live input — falling back to a
+    // generic label before the browser hands back device names — so the
+    // clinician can always see which mic is hot. Outside recording, a lone
+    // unlabelled device shows nothing (Resume handles mic selection).
+    if (!showSingle) return null;
     return (
       <span className="flex max-w-[12rem] items-center gap-1.5 text-zinc-400 dark:text-zinc-500">
         <MicrophoneIcon aria-hidden="true" className="size-4 shrink-0" />
@@ -941,6 +996,93 @@ function saveLabel(status: SaveStatus): string {
     default:
       return "Auto-saves";
   }
+}
+
+// Counts elapsed milliseconds while `running`, freezing (not resetting) when it
+// flips false and continuing from there when it flips back — so a pause holds
+// the clock and resume keeps counting.
+function useElapsed(running: boolean): number {
+  const [ms, setMs] = useState(0);
+  const accRef = useRef(0);
+  const sinceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!running) return;
+    sinceRef.current = Date.now();
+    const id = setInterval(() => {
+      const since = sinceRef.current;
+      setMs(accRef.current + (since !== null ? Date.now() - since : 0));
+    }, 1000);
+    return () => {
+      clearInterval(id);
+      if (sinceRef.current !== null) {
+        accRef.current += Date.now() - sinceRef.current;
+        sinceRef.current = null;
+      }
+      setMs(accRef.current);
+    };
+  }, [running]);
+  return ms;
+}
+
+function formatDuration(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+// Live input-loudness meter. Reads the smoothed RMS off `getLevel` each frame
+// and lights bars imperatively — no per-frame React render. Goes dim when
+// inactive (paused / starting), giving the clinician a quick "the mic is
+// hearing me" signal that finalised text alone can't.
+function LevelMeter({
+  getLevel,
+  active,
+}: {
+  getLevel: () => number;
+  active: boolean;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const container = ref.current;
+    if (!container) return;
+    const bars = Array.from(container.children) as HTMLElement[];
+    if (!active) {
+      bars.forEach((bar) => (bar.style.opacity = "0.2"));
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      // Speech RMS sits low (~0.02–0.15); scale so normal talking fills it.
+      const lvl = Math.min(1, getLevel() * 6);
+      bars.forEach((bar, i) => {
+        const threshold = (i + 0.5) / bars.length;
+        bar.style.opacity = lvl >= threshold ? "1" : "0.25";
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [active, getLevel]);
+
+  return (
+    <span
+      ref={ref}
+      aria-hidden="true"
+      className="flex h-8 items-center gap-[3px] px-1"
+    >
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span
+          key={i}
+          className="w-[3px] rounded-full bg-red-500 transition-opacity duration-75"
+          style={{ height: `${6 + i * 3}px`, opacity: 0.2 }}
+        />
+      ))}
+    </span>
+  );
 }
 
 function Toolbar({

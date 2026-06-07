@@ -14,6 +14,11 @@ export interface AudioCapture {
   resume(): void;
   stop(): Promise<void>;
   listDevices(): Promise<MediaDeviceInfo[]>;
+  // Current input loudness in [0, 1], a smoothed RMS of the most recent PCM
+  // frames. Drives the live level meter so the clinician can see the mic is
+  // actually picking up audio. Returns 0 before capture starts and decays to 0
+  // while paused (the worklet keeps emitting silent frames).
+  getLevel(): number;
 }
 
 // Acquire the mic stream, pinning the requested device when one is given. The
@@ -58,6 +63,9 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
   let source: MediaStreamAudioSourceNode | null = null;
   let blobUrl: string | null = null;
   let paused = false;
+  // Smoothed input loudness, updated on every PCM frame. Fast attack so a word
+  // lights the meter instantly, slower decay so it falls back like a real VU.
+  let level = 0;
 
   return {
     async start(onChunk) {
@@ -81,8 +89,19 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
         channelCount: 1,
       });
       node.port.onmessage = (ev: MessageEvent<Int16Array>) => {
+        // Update the meter from every frame — including while paused, where the
+        // muted track yields silence so the level naturally falls to 0.
+        const pcm = ev.data;
+        let sumSquares = 0;
+        for (let i = 0; i < pcm.length; i++) {
+          const sample = pcm[i] / 0x8000;
+          sumSquares += sample * sample;
+        }
+        const rms = pcm.length > 0 ? Math.sqrt(sumSquares / pcm.length) : 0;
+        level = rms > level ? rms : level * 0.8 + rms * 0.2;
+
         if (paused) return;
-        onChunk(ev.data);
+        onChunk(pcm);
       };
       source.connect(node);
     },
@@ -115,7 +134,12 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
         node = null;
         source = null;
         blobUrl = null;
+        level = 0;
       }
+    },
+
+    getLevel() {
+      return level;
     },
 
     async listDevices() {
