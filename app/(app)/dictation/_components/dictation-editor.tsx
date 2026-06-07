@@ -1029,7 +1029,10 @@ function MicPicker({
   }
 
   return (
-    <span className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900">
+    // Sized to match the Resume/Delete buttons (px-3.5 py-1.5 text-sm, fixed
+    // width) so the control row reads as one uniform set; the device name
+    // truncates within the fixed width.
+    <span className="flex w-36 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-900">
       <MicrophoneIcon
         aria-hidden="true"
         className="size-4 shrink-0 text-zinc-400 dark:text-zinc-500"
@@ -1039,7 +1042,7 @@ function MicPicker({
         value={selectedDeviceId ?? ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="max-w-[10rem] truncate border-0 bg-transparent py-0.5 text-xs text-zinc-700 focus:outline-none disabled:opacity-50 dark:text-zinc-200"
+        className="w-full min-w-0 truncate border-0 bg-transparent text-sm text-zinc-700 focus:outline-none disabled:opacity-50 dark:text-zinc-200"
       >
         {devices.map((d) => (
           <option key={d.deviceId} value={d.deviceId}>
