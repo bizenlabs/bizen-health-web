@@ -341,11 +341,7 @@ export function DictationEditor({
   const doSave = useCallback(
     async (markdown: string) => {
       setSaveStatus("saving");
-      const res = await editTranscriptionNoteAction(
-        transcriptionId,
-        markdown,
-        null,
-      );
+      const res = await editTranscriptionNoteAction(transcriptionId, markdown);
       if (res.ok) {
         setLastSavedAt(Date.now());
         setSaveStatus("saved");

@@ -128,9 +128,13 @@ export const failTranscription = (id: string, reason?: string) =>
     { method: "POST" },
   );
 
+// Saves the edited note body only. Deliberately PATCHes nothing but
+// `noteContent` — sending `templateId` here (even as null) would clear the
+// dictation's template association on every auto-save, mislabelling a
+// templated note as free-form on the next load.
 export const editTranscriptionNote = (
   id: string,
-  body: { noteContent: string | null; templateId: string | null },
+  body: { noteContent: string | null },
 ) =>
   api<TranscriptionDetail>(`/v1/transcriptions/${id}`, {
     method: "PATCH",

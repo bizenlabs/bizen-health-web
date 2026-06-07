@@ -118,11 +118,10 @@ export async function failTranscriptionAction(
 export async function editTranscriptionNoteAction(
   transcriptionId: string,
   noteContent: string | null,
-  templateId: string | null = null,
 ): Promise<ActionResult<TranscriptionDetail>> {
   await requireSession();
   const result = await run(
-    () => editTranscriptionNote(transcriptionId, { noteContent, templateId }),
+    () => editTranscriptionNote(transcriptionId, { noteContent }),
     "Failed to save the note.",
   );
   if (result.ok) revalidateFor(result.data);
