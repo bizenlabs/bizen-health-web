@@ -782,16 +782,16 @@ export function DictationEditor({
             )}
           </div>
         </div>
-        <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
           {startedAtLabel}
         </p>
       </header>
 
       {/* Divider between the header and the note surface */}
-      <hr className="mt-4 border-t border-zinc-200 dark:border-zinc-800" />
+      <hr className="mt-3 border-t border-zinc-200 dark:border-zinc-800" />
 
       {/* Status strip — recording state, note format, save status */}
-      <div className="flex items-center justify-between gap-3 pt-3">
+      <div className="flex items-center justify-between gap-3 pt-2">
         <span
           role="status"
           aria-live="polite"
@@ -887,7 +887,7 @@ export function DictationEditor({
       {showTabs ? (
         <div
           role="tablist"
-          className="mt-4 flex gap-x-6 border-b border-zinc-200 text-sm font-semibold dark:border-zinc-800"
+          className="mt-3 flex gap-x-6 border-b border-zinc-200 text-sm font-semibold dark:border-zinc-800"
         >
           <TabBtn
             active={activeTab === "note"}
@@ -912,7 +912,7 @@ export function DictationEditor({
           documentSubtitle={startedAtLabel}
         />
       ) : !showTabs ? (
-        <div className="mt-4" />
+        <div className="mt-3" />
       ) : null}
 
       {/* Body — fills the remaining height, scrolls within. The editor stays
@@ -1248,7 +1248,7 @@ function Toolbar({
   const alt = isMac ? "⌥" : "Alt+";
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-0.5 border-y border-zinc-100 py-1.5 dark:border-zinc-800/80">
+    <div className="mt-3 flex flex-wrap items-center gap-0.5 border-y border-zinc-100 py-1.5 dark:border-zinc-800/80">
       <ToolBtn
         icon={Bold}
         label="Bold"
