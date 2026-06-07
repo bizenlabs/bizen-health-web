@@ -12,10 +12,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeftIcon,
-  DocumentTextIcon,
   MicrophoneIcon,
   PauseIcon,
-  PencilSquareIcon,
   PlayIcon,
   StopIcon,
 } from "@heroicons/react/20/solid";
@@ -673,8 +671,6 @@ export function DictationEditor({
     }
   }
 
-  const TemplateGlyph = templateName ? DocumentTextIcon : PencilSquareIcon;
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {voided ? (
@@ -790,67 +786,39 @@ export function DictationEditor({
       {/* Divider between the header and the note surface */}
       <hr className="mt-3 border-t border-zinc-200 dark:border-zinc-800" />
 
-      {/* Status strip — recording state, note format, save status */}
-      <div className="flex items-center justify-between gap-3 pt-2">
-        <span
+      {/* Recording HUD — shown only while the mic session is live. The editing
+          view has no equivalent strip: the Note/Transcript tabs convey the
+          mode and the save status lives in the toolbar. */}
+      {recording ? (
+        <div
           role="status"
           aria-live="polite"
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 pt-2"
         >
           <span
             aria-hidden="true"
             className={clsx(
               "size-1.5 rounded-full",
-              paused
-                ? "bg-amber-500"
-                : recording
-                  ? "animate-pulse bg-red-500"
-                  : "bg-zinc-200 dark:bg-zinc-700",
+              paused ? "bg-amber-500" : "animate-pulse bg-red-500",
             )}
           />
           <span className="font-mono text-[10px] font-medium tracking-[0.2em] text-zinc-400 uppercase dark:text-zinc-500">
-            {paused
-              ? "Paused"
-              : recording
-                ? "Recording"
-                : voided
-                  ? "Deleted"
-                  : showTabs && activeTab === "transcript"
-                    ? "Transcript"
-                    : "Note"}
+            {paused ? "Paused" : "Recording"}
           </span>
-          {recording ? (
-            <span
-              aria-hidden="true"
-              className="font-mono text-[10px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500"
-            >
-              {formatDuration(elapsedMs)}
-            </span>
-          ) : null}
-          {recording && activeSection ? (
+          <span
+            aria-hidden="true"
+            className="font-mono text-[10px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500"
+          >
+            {formatDuration(elapsedMs)}
+          </span>
+          {activeSection ? (
             <span className="hidden items-center gap-1 text-[10px] tracking-wide text-zinc-400 sm:flex dark:text-zinc-500">
               <span aria-hidden="true">→</span>
               <span className="max-w-[12rem] truncate">{activeSection}</span>
             </span>
           ) : null}
-        </span>
-
-        <span className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 font-mono text-[11px] tracking-wide text-zinc-400 dark:text-zinc-500">
-            <TemplateGlyph aria-hidden="true" className="size-3.5" />
-            {templateName ?? "Free-form dictation"}
-          </span>
-          {phase === "editing" || paused ? (
-            <span role="status" aria-live="polite">
-              <SaveIndicator
-                status={saveStatus}
-                lastSavedAt={lastSavedAt}
-                now={now}
-              />
-            </span>
-          ) : null}
-        </span>
-      </div>
+        </div>
+      ) : null}
 
       {error || resumeError ? (
         <p
@@ -910,6 +878,9 @@ export function DictationEditor({
           editor={editor}
           documentTitle={title ?? templateName ?? "Free-form dictation"}
           documentSubtitle={startedAtLabel}
+          saveStatus={saveStatus}
+          lastSavedAt={lastSavedAt}
+          now={now}
         />
       ) : !showTabs ? (
         <div className="mt-3" />
@@ -1214,10 +1185,16 @@ function Toolbar({
   editor,
   documentTitle,
   documentSubtitle,
+  saveStatus,
+  lastSavedAt,
+  now,
 }: {
   editor: Editor;
   documentTitle: string;
   documentSubtitle?: string;
+  saveStatus: SaveStatus;
+  lastSavedAt: number | null;
+  now: number;
 }) {
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1323,20 +1300,35 @@ function Toolbar({
         disabled={!editor.can().redo()}
         onClick={() => editor.chain().focus().redo().run()}
       />
-      <div className="ml-auto flex items-center gap-0.5">
-        <ToolBtn
-          icon={copied ? Check : Copy}
-          label={copied ? "Copied" : "Copy note"}
-          align="right"
-          active={copied}
-          onClick={handleCopy}
-        />
-        <DictationExportMenu
-          editor={editor}
-          title={documentTitle}
-          subtitle={documentSubtitle}
-          disabled={editor.isEmpty}
-        />
+      <div className="ml-auto flex items-center gap-2">
+        {/* Auto-save status lives here — the toolbar is shown exactly when the
+            note is editable, so this is where save state is meaningful. */}
+        <span
+          role="status"
+          aria-live="polite"
+          className="hidden sm:inline-flex"
+        >
+          <SaveIndicator
+            status={saveStatus}
+            lastSavedAt={lastSavedAt}
+            now={now}
+          />
+        </span>
+        <div className="flex items-center gap-0.5">
+          <ToolBtn
+            icon={copied ? Check : Copy}
+            label={copied ? "Copied" : "Copy note"}
+            align="right"
+            active={copied}
+            onClick={handleCopy}
+          />
+          <DictationExportMenu
+            editor={editor}
+            title={documentTitle}
+            subtitle={documentSubtitle}
+            disabled={editor.isEmpty}
+          />
+        </div>
       </div>
     </div>
   );

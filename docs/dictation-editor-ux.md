@@ -95,6 +95,21 @@ pending (staging runs the unpatched build).
 
 ---
 
+## Post-review refinements
+
+Follow-on tweaks from design review after the four tiers landed:
+
+- **Stop button** reverted from solid-dark to a soft red outline (familiar
+  stop-recording cue, distinct from the filled Delete).
+- **Mic dropdown** sized to match the Resume/Delete buttons (fixed `w-36`).
+- **Header spacing** tightened (smaller started-at date, evened divider gaps).
+- **Status-strip row removed in the editing view** (supersedes Tier 4 #11). It
+  was redundant with the Note/Transcript tabs and duplicated the title's
+  template name. The strip now renders **only while recording** (the live HUD:
+  state + timer + section). The **auto-save indicator moved into the editor
+  toolbar** (right side, before Copy/Export) — shown exactly when the note is
+  editable. `role="status" aria-live="polite"` preserved in its new home.
+
 ## Suggested sequencing
 
 1. Tier 1 (#1–#4) — recording trust.
