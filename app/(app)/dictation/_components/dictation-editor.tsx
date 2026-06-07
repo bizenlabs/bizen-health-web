@@ -195,6 +195,8 @@ export function DictationEditor({
 
   const [stopped, setStopped] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  // When the note was last persisted — drives the "Saved · 2m ago" timestamp.
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
   // Which pane the review view shows once recording has stopped: the editable
@@ -219,6 +221,10 @@ export function DictationEditor({
   // Active-recording elapsed time — counts while the mic is live, freezes (not
   // resets) on pause, and resumes from where it left off.
   const elapsedMs = useElapsed(state === "recording");
+
+  // Ticks only while a saved timestamp is on screen, so "Saved · 2m ago" ages
+  // without a permanent interval.
+  const now = useNow(saveStatus === "saved");
 
   // Reflect the mic carried over from intake (or a previous sitting) in the
   // picker once the browser hands back real device labels — but only if it's
@@ -340,10 +346,21 @@ export function DictationEditor({
         markdown,
         null,
       );
-      setSaveStatus(res.ok ? "saved" : "error");
+      if (res.ok) {
+        setLastSavedAt(Date.now());
+        setSaveStatus("saved");
+      } else {
+        setSaveStatus("error");
+      }
     },
     [transcriptionId],
   );
+
+  // Retry a failed save with the note's current content — the failed edit is
+  // still in the editor, so re-saving picks it up.
+  const handleRetrySave = useCallback(() => {
+    if (editor) void doSave(editor.getMarkdown());
+  }, [editor, doSave]);
 
   const scheduleSave = useCallback(
     (markdown: string) => {
@@ -558,13 +575,18 @@ export function DictationEditor({
     editor.chain().focus().setTextSelection(safe).run();
   }, [editor, paused]);
 
-  // Warn before navigating away mid-recording — audio can't be resumed.
+  // Warn before navigating away with work that would be lost: mid-recording
+  // (audio can't be resumed), or with a note edit still in flight — either
+  // inside the debounce/save window ("saving") or after a failed save
+  // ("error"), both of which mean unpersisted changes.
+  const hasUnsavedWork =
+    phase === "recording" || saveStatus === "saving" || saveStatus === "error";
   useEffect(() => {
-    if (phase !== "recording") return;
+    if (!hasUnsavedWork) return;
     const handler = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [phase]);
+  }, [hasUnsavedWork]);
 
   const recording =
     state === "starting" || state === "recording" || state === "paused";
@@ -807,10 +829,12 @@ export function DictationEditor({
             <TemplateGlyph aria-hidden="true" className="size-3.5" />
             {templateName ?? "Free-form dictation"}
           </span>
-          {phase === "editing" ? (
-            <span className="font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
-              {saveLabel(saveStatus)}
-            </span>
+          {phase === "editing" || paused ? (
+            <SaveIndicator
+              status={saveStatus}
+              lastSavedAt={lastSavedAt}
+              now={now}
+            />
           ) : null}
         </span>
       </div>
@@ -819,6 +843,28 @@ export function DictationEditor({
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
           {error ?? resumeError}
         </p>
+      ) : null}
+
+      {/* A failed auto-save is data-loss-adjacent for a clinical note, so it
+          gets a visible banner with a retry — not just the quiet strip text.
+          The edit is still in the editor; Retry re-sends the current content. */}
+      {saveStatus === "error" ? (
+        <div
+          role="alert"
+          className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+        >
+          <span>
+            Couldn&rsquo;t save your note. Your changes are still here — retry
+            to save them.
+          </span>
+          <button
+            type="button"
+            onClick={handleRetrySave}
+            className="shrink-0 rounded-md border border-red-300 px-2.5 py-1 font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+          >
+            Retry
+          </button>
+        </div>
       ) : null}
 
       {/* Note / Transcript tabs — only after recording has stopped */}
@@ -985,17 +1031,69 @@ function MicPicker({
   );
 }
 
-function saveLabel(status: SaveStatus): string {
-  switch (status) {
-    case "saving":
-      return "Saving…";
-    case "saved":
-      return "Saved";
-    case "error":
-      return "Save failed";
-    default:
-      return "Auto-saves";
+// A current timestamp that refreshes every 30s while `active`, for ageing a
+// relative "… ago" label without a perpetual interval.
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+function formatRelative(deltaMs: number): string {
+  const s = Math.max(0, Math.round(deltaMs / 1000));
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  return `${h}h ago`;
+}
+
+// The auto-save status, in plain language. Errors are owned by the banner
+// above, so here a failure is just a quiet red marker; success carries a
+// relative timestamp so "saved" reads as a confirmed event, not a promise.
+function SaveIndicator({
+  status,
+  lastSavedAt,
+  now,
+}: {
+  status: SaveStatus;
+  lastSavedAt: number | null;
+  now: number;
+}) {
+  const base = "flex items-center gap-1 text-[11px] tracking-wide";
+  if (status === "saving") {
+    return (
+      <span className={clsx(base, "text-zinc-400 dark:text-zinc-500")}>
+        Saving…
+      </span>
+    );
   }
+  if (status === "error") {
+    return (
+      <span className={clsx(base, "text-red-600 dark:text-red-400")}>
+        Save failed
+      </span>
+    );
+  }
+  if (status === "saved") {
+    return (
+      <span className={clsx(base, "text-zinc-400 dark:text-zinc-500")}>
+        <Check aria-hidden="true" className="size-3" />
+        Saved
+        {lastSavedAt !== null ? ` · ${formatRelative(now - lastSavedAt)}` : ""}
+      </span>
+    );
+  }
+  return (
+    <span className={clsx(base, "text-zinc-400 dark:text-zinc-500")}>
+      Auto-save on
+    </span>
+  );
 }
 
 // Counts elapsed milliseconds while `running`, freezing (not resetting) when it

@@ -33,17 +33,21 @@ and lints clean; visual verification still pending a live recording session
 
 ## Tier 2 — Save integrity (clinical data safety)
 
-- [ ] **Extend the unsaved-edit guard beyond recording.** `beforeunload` only
-      fires during recording (`dictation-editor.tsx:526-531`). In editing,
-      navigating away during the 1200ms debounce window or after a failed save
-      silently loses the edit. Guard on `saveStatus === "saving" | "error"` too.
-- [ ] **Make "Save failed" recoverable and visible.** It renders as ~10px gray
-      uppercase mono in the far corner (`saveLabel`, `dictation-editor.tsx:759-763,
-933-944`) with no retry path. Promote failures to a visible banner + a
-      **Retry** action.
-- [ ] **Clarify save-status wording.** "Auto-saves" reads as a promise, not a
-      state. Use explicit states with an icon — "All changes saved ✓" ↔ "Saving…"
-      ↔ "Unsaved changes" — ideally with a relative timestamp.
+**All three done** — type-checks and lints clean; visual verification still
+pending (failed-save banner needs a forced save error to exercise).
+
+- [x] **Extend the unsaved-edit guard beyond recording.** `beforeunload` now
+      fires on `hasUnsavedWork` — recording **or** `saveStatus === "saving"`
+      (covers the debounce window) **or** `"error"` — so an in-flight or failed
+      note edit blocks navigation, not just recording.
+- [x] **Make "Save failed" recoverable and visible.** A failed save now raises a
+      `role="alert"` banner ("Your changes are still here — retry to save them")
+      with a **Retry** button (`handleRetrySave` re-sends the editor's current
+      content). The quiet strip text remains as a secondary cue.
+- [x] **Clarify save-status wording.** New `SaveIndicator` replaces the terse
+      `saveLabel`: "Saving…" / "Saved · 2m ago" (check icon + relative time via
+      `useNow`/`formatRelative`) / "Auto-save on". `lastSavedAt` records each
+      success; the status now shows in the paused state too, not just editing.
 
 ## Tier 3 — Clarity / correctness
 
