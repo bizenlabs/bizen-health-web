@@ -60,3 +60,12 @@ body {
 .ProseMirror p.is-editor-empty:first-child::before {
   font-style: normal;
 }
+
+/* Template section headings whose section body is still empty are dimmed (via
+   the EmptySectionDimmer decoration) so an unfilled scaffold doesn't read as a
+   wall of equally-weighted headings. The heading un-dims the moment text lands
+   in its section. */
+.ProseMirror .dictation-empty-section {
+  opacity: 0.45;
+  transition: opacity 0.2s ease;
+}

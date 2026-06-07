@@ -74,19 +74,23 @@ one — root-caused and fixed below. Type-checks and lints clean.
 
 ## Tier 4 — Polish
 
-- [ ] **Status strip left label should track the active tab.** It still reads
-      "● NOTE" while viewing the Transcript tab
-      (`dictation-editor.tsx:743-751`).
-- [ ] **De-emphasize empty template sections.** The Procedure Note scaffold
-      renders ~10 empty section headings; the clinician scrolls past a lot of
-      blank structure. Consider collapsing/de-emphasizing empty sections.
-- [ ] **Frame the raw transcript pane.** One short line sits atop ~600px of
-      blank space (`TranscriptPane`, `dictation-editor.tsx:856-874`). A subtle
-      card/indent would help.
-- [ ] **Accessibility: announce state changes.** Recording→Paused, "Save
-      failed", and the error banner aren't in `aria-live` regions; recording state
-      is conveyed color-only. Wrap the status strip in `aria-live="polite"` and
-      make save errors assertive.
+**All four done** — type-checks and lints clean; visual verification still
+pending (staging runs the unpatched build).
+
+- [x] **Status strip left label tracks the active tab.** The pill now reads
+      "Transcript" when the Transcript tab is active, "Note" otherwise.
+- [x] **De-emphasize empty template sections.** New `EmptySectionDimmer`
+      ProseMirror extension (`empty-section-dimmer.ts`) + a `.dictation-empty-section`
+      rule in `globals.css` dim a heading whose section body is still empty;
+      it un-dims the moment text lands in it. Decoration-only — never touches the
+      document or saved Markdown.
+- [x] **Frame the raw transcript pane.** `TranscriptPane` content is now wrapped
+      in a subtle bordered card so a short transcript reads as a contained block.
+- [x] **Accessibility: announce state changes.** Status label and save indicator
+      sit in `role="status" aria-live="polite"` regions; the transcription-error
+      banner is `role="alert"` (the failed-save banner already was). The
+      per-second timer and 30s relative timestamp are `aria-hidden` so they don't
+      spam assistive tech.
 
 ---
 

@@ -56,6 +56,7 @@ import {
 import { DictationDeleteButton } from "./dictation-delete-button";
 import { DictationExportMenu } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
+import { EmptySectionDimmer } from "./empty-section-dimmer";
 import {
   buildPlaceholderFn,
   cleanTemplateForEditor,
@@ -308,6 +309,7 @@ export function DictationEditor({
       StarterKit,
       Underline,
       Markdown,
+      EmptySectionDimmer,
       Placeholder.configure({
         placeholder: placeholderFn,
         // Hints attach to every empty section node, not just the focused one,
@@ -794,8 +796,13 @@ export function DictationEditor({
 
       {/* Status strip — recording state, note format, save status */}
       <div className="flex items-center justify-between gap-3 pt-3">
-        <span className="flex items-center gap-2">
+        <span
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2"
+        >
           <span
+            aria-hidden="true"
             className={clsx(
               "size-1.5 rounded-full",
               paused
@@ -812,10 +819,15 @@ export function DictationEditor({
                 ? "Recording"
                 : voided
                   ? "Deleted"
-                  : "Note"}
+                  : showTabs && activeTab === "transcript"
+                    ? "Transcript"
+                    : "Note"}
           </span>
           {recording ? (
-            <span className="font-mono text-[10px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500">
+            <span
+              aria-hidden="true"
+              className="font-mono text-[10px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500"
+            >
               {formatDuration(elapsedMs)}
             </span>
           ) : null}
@@ -833,17 +845,22 @@ export function DictationEditor({
             {templateName ?? "Free-form dictation"}
           </span>
           {phase === "editing" || paused ? (
-            <SaveIndicator
-              status={saveStatus}
-              lastSavedAt={lastSavedAt}
-              now={now}
-            />
+            <span role="status" aria-live="polite">
+              <SaveIndicator
+                status={saveStatus}
+                lastSavedAt={lastSavedAt}
+                now={now}
+              />
+            </span>
           ) : null}
         </span>
       </div>
 
       {error || resumeError ? (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+        <p
+          role="alert"
+          className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+        >
           {error ?? resumeError}
         </p>
       ) : null}
@@ -960,15 +977,19 @@ function TranscriptPane({ text }: { text: string }) {
       <p className="mb-2 font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
         Raw transcript — unedited
       </p>
-      {trimmed ? (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap text-zinc-600 dark:text-zinc-300">
-          {trimmed}
-        </p>
-      ) : (
-        <p className="text-sm text-zinc-400 italic dark:text-zinc-500">
-          No transcript was captured for this dictation.
-        </p>
-      )}
+      {/* Framed so a short transcript reads as a contained block rather than a
+          stray line floating in an empty pane. */}
+      <div className="rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+        {trimmed ? (
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-zinc-600 dark:text-zinc-300">
+            {trimmed}
+          </p>
+        ) : (
+          <p className="text-sm text-zinc-400 italic dark:text-zinc-500">
+            No transcript was captured for this dictation.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -1088,7 +1109,11 @@ function SaveIndicator({
       <span className={clsx(base, "text-zinc-400 dark:text-zinc-500")}>
         <Check aria-hidden="true" className="size-3" />
         Saved
-        {lastSavedAt !== null ? ` · ${formatRelative(now - lastSavedAt)}` : ""}
+        {lastSavedAt !== null ? (
+          // aria-hidden so the 30s relative-time tick isn't announced over and
+          // over; "Saved" alone carries the meaning for assistive tech.
+          <span aria-hidden="true">{` · ${formatRelative(now - lastSavedAt)}`}</span>
+        ) : null}
       </span>
     );
   }
