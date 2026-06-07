@@ -738,20 +738,16 @@ export function DictationEditor({
                     Pause
                   </button>
                 )}
-                {/* Stop is the primary "finish recording" action and is
-                    non-destructive (Resume / re-open afterward), so it reads as
-                    a solid neutral button — red is reserved for Delete. The
-                    small red glyph keeps the familiar stop-recording cue. */}
+                {/* Stop ends recording — a soft red outline, the familiar
+                    stop-recording cue. (Distinct from Delete, which is a filled
+                    destructive control.) */}
                 <button
                   type="button"
                   onClick={() => void handleStop()}
                   disabled={state === "starting"}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
                 >
-                  <StopIcon
-                    aria-hidden="true"
-                    className="size-4 text-red-500"
-                  />
+                  <StopIcon aria-hidden="true" className="size-4" />
                   {state === "starting" ? "Starting…" : "Stop"}
                 </button>
               </>

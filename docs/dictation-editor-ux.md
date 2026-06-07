@@ -68,9 +68,10 @@ one — root-caused and fixed below. Type-checks and lints clean.
       went from solid black (`bg-zinc-900`) to a subtle tint
       (`bg-zinc-200`/`dark:bg-zinc-700`) so an on-toggle no longer reads as a
       primary CTA.
-- [x] **Restyle Stop as neutral, not red.** Stop is now a solid neutral/dark
-      button (red reserved for Delete), keeping a small red stop glyph as the
-      familiar recording cue.
+- [x] **Restyle Stop.** Tried a solid neutral/dark button, but per design
+      review reverted to a **soft red outline** (red border + text, hover
+      red-50) — the familiar stop-recording cue, kept visually distinct from the
+      filled destructive Delete control.
 
 ## Tier 4 — Polish
 
