@@ -51,18 +51,26 @@ pending (failed-save banner needs a forced save error to exercise).
 
 ## Tier 3 — Clarity / correctness
 
-- [ ] **Investigate content ↔ label mismatch (likely a bug, verify
-      server-side).** Title + status strip showed "Free-form dictation" with the
-      free-form glyph, but the body was a full **Procedure Note** template
-      scaffold. `templateName` isn't reflected in the header/metadata. Confirm
-      whether the template association failed to persist.
-- [ ] **Soften the active-toggle styling in the toolbar.** The active state
-      (`bg-zinc-900` solid black, `dictation-editor.tsx:1109-1114`) is far heavier
-      than the ghost toolbar around it — on load, an active "Bold" reads like a
-      primary CTA. Use a subtle tinted active state.
-- [ ] **Restyle Stop as neutral, not red.** Stop is non-destructive (Resume /
-      re-open afterward), so red mis-teaches "danger"
-      (`dictation-editor.tsx:681-689`). Reserve red for Delete.
+**All three done.** #8 turned out to be a **frontend bug**, not a server-side
+one — root-caused and fixed below. Type-checks and lints clean.
+
+- [x] **Content ↔ label mismatch — root-caused & fixed (was a client bug).**
+      The note auto-save called
+      `editTranscriptionNoteAction(id, markdown, null)`, and
+      `editTranscriptionNote` serialised `templateId: null` into the PATCH body
+      — so **every save wiped the dictation's templateId**. On the next load
+      `getTemplate` had no id, so a templated note labelled itself "Free-form
+      dictation". Fix: `editTranscriptionNote` now PATCHes `noteContent` only;
+      dropped the `templateId` param from the action and the `doSave` call.
+      _Residual:_ dictations whose templateId was already wiped stay null in the
+      DB — a one-off backfill/repair is out of scope here.
+- [x] **Soften the active-toggle styling in the toolbar.** Active `ToolBtn`
+      went from solid black (`bg-zinc-900`) to a subtle tint
+      (`bg-zinc-200`/`dark:bg-zinc-700`) so an on-toggle no longer reads as a
+      primary CTA.
+- [x] **Restyle Stop as neutral, not red.** Stop is now a solid neutral/dark
+      button (red reserved for Delete), keeping a small red stop glyph as the
+      familiar recording cue.
 
 ## Tier 4 — Polish
 
