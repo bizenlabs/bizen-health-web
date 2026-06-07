@@ -37,15 +37,26 @@ body {
     sans-serif;
 }
 
-/* Template helper text in the dictation editor — `[Patient's primary reason
-   for visit]` and `(Document in patient's own words when possible)`. Visually
-   demoted so the clinician sees them as hints, not their own content. */
-.template-hint {
+/* Dictation editor placeholders — per-section template hints (and the empty
+   editor prompt). Rendered as ghost text on empty nodes via Tiptap's
+   Placeholder extension, so they are NOT document content: a clinician can't
+   select, restyle, or save them, and they vanish the moment a section is
+   dictated or typed into. */
+.ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
   color: rgb(161 161 170);
   font-style: italic;
-  opacity: 0.7;
+  float: left;
+  height: 0;
+  pointer-events: none;
 }
 
-.dark .template-hint {
+.dark .ProseMirror .is-empty::before {
   color: rgb(113 113 122);
+}
+
+/* The fresh-editor prompt (no template) reads as a plain hint, not a hint
+   demoted in italics. */
+.ProseMirror p.is-editor-empty:first-child::before {
+  font-style: normal;
 }

@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -49,7 +56,13 @@ import {
 import { DictationDeleteButton } from "./dictation-delete-button";
 import { DictationExportMenu } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
-import { TemplateHint } from "./template-hint-extension";
+import {
+  buildPlaceholderFn,
+  cleanTemplateForEditor,
+  findFirstEmptyTextblock,
+  insertHintNodes,
+  type TemplateHint,
+} from "./template-hints";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
 // While the mic is live the editor is read-only and finalised utterances are
@@ -82,29 +95,6 @@ function resetHistory(editor: Editor) {
       selection: state.selection,
     }),
   );
-}
-
-// Markdown collapses consecutive headings — there is no paragraph node between
-// `## A` and `## B`. Walk the doc and insert an empty paragraph after every
-// heading that lacks one, so every section has a writable slot for the
-// cursor to land in.
-function ensureTemplateStructure(editor: Editor) {
-  const { paragraph } = editor.schema.nodes;
-  const positions: number[] = [];
-  editor.state.doc.forEach((node, offset) => {
-    if (node.type.name !== "heading") return;
-    const afterHeading = offset + node.nodeSize;
-    const $pos = editor.state.doc.resolve(afterHeading);
-    if (!$pos.nodeAfter || $pos.nodeAfter.type.name !== "paragraph") {
-      positions.push(afterHeading);
-    }
-  });
-  if (positions.length === 0) return;
-  let tr = editor.state.tr;
-  for (let i = positions.length - 1; i >= 0; i--) {
-    tr = tr.insert(positions[i], paragraph.create());
-  }
-  editor.view.dispatch(tr);
 }
 
 /** Position inside the first paragraph after the first top-level heading. */
@@ -260,15 +250,42 @@ export function DictationEditor({
   // deleted before the next tick replaces it.
   const partialRangeRef = useRef<{ from: number; length: number } | null>(null);
 
+  // Strip the template's `[placeholder]` / `(instruction)` helper text out of
+  // the seeded Markdown and extract the bracket hints. The hints are rendered
+  // as non-editable placeholder ghost text (see `template-hints.ts`), never as
+  // real content — so they can't be styled, partially overtyped, or saved.
+  const { cleanedMarkdown, hints } = useMemo(
+    () => cleanTemplateForEditor(templateContent ?? ""),
+    [templateContent],
+  );
+
+  // Read hints from a ref so the Placeholder function (configured once below)
+  // always sees the current set without re-creating the editor.
+  const hintsRef = useRef<TemplateHint[]>(hints);
+  useEffect(() => {
+    hintsRef.current = hints;
+  }, [hints]);
+
+  // buildPlaceholderFn only closes over the ref — it reads `hintsRef.current`
+  // lazily when the Placeholder extension invokes it, never during render.
+  // eslint-disable-next-line react-hooks/refs
+  const [placeholderFn] = useState(() =>
+    buildPlaceholderFn(hintsRef, "Your dictated note will appear here…"),
+  );
+
   const editor = useEditor({
     extensions: [
       StarterKit,
       Underline,
       Markdown,
       Placeholder.configure({
-        placeholder: "Your dictated note will appear here…",
+        placeholder: placeholderFn,
+        // Hints attach to every empty section node, not just the focused one,
+        // and stay visible while the mic is live (the editor is read-only then).
+        showOnlyCurrent: false,
+        showOnlyWhenEditable: false,
+        includeChildren: true,
       }),
-      TemplateHint,
     ],
     editable: false,
     immediatelyRender: false,
@@ -354,8 +371,10 @@ export function DictationEditor({
   useEffect(() => {
     if (!editor || initRef.current) return;
 
-    const templateBody = templateContent?.trim() ?? "";
     const transcriptBody = transcriptText?.trim() ?? "";
+    // Seed hint slots only for a fresh template scaffold (no saved note yet).
+    // A saved note is the clinician's own content and is loaded verbatim.
+    const seedingTemplate = !initialNote && cleanedMarkdown.length > 0;
 
     if (initialNote) {
       // Clinician has a saved version of this note — load it as-is.
@@ -363,10 +382,11 @@ export function DictationEditor({
         contentType: "markdown",
         emitUpdate: false,
       });
-    } else if (templateBody) {
-      // Seed just the template scaffold. The raw dictation is NOT dumped into
-      // the note — it's available read-only in the Transcript tab.
-      editor.commands.setContent(templateBody, {
+    } else if (cleanedMarkdown) {
+      // Seed the *cleaned* template scaffold — placeholders and instructions
+      // stripped. The raw dictation is NOT dumped into the note; it's
+      // available read-only in the Transcript tab.
+      editor.commands.setContent(cleanedMarkdown, {
         contentType: "markdown",
         emitUpdate: false,
       });
@@ -378,7 +398,9 @@ export function DictationEditor({
       });
     }
 
-    if (templateBody) ensureTemplateStructure(editor);
+    // Create the empty section nodes the extracted hints attach to, so each
+    // section shows its guidance as non-editable placeholder ghost text.
+    if (seedingTemplate) insertHintNodes(editor, hints);
 
     // Where dictation should land.
     let pos: number | null = null;
@@ -396,9 +418,12 @@ export function DictationEditor({
       /* sessionStorage unavailable */
     }
 
-    // 2. Templated: first paragraph after the first heading.
-    if (pos === null && templateBody) {
-      pos = findPositionAfterFirstHeading(editor);
+    // 2. Templated: the first empty hint slot, else the first paragraph after
+    //    the first heading.
+    if (pos === null && seedingTemplate) {
+      pos =
+        findFirstEmptyTextblock(editor) ??
+        findPositionAfterFirstHeading(editor);
     }
 
     // 3. Fallback: end of doc.
@@ -412,7 +437,14 @@ export function DictationEditor({
     processedSegCountRef.current = initialSegments.length;
     resetHistory(editor);
     initRef.current = true;
-  }, [editor, initialNote, templateContent, transcriptText, initialSegments]);
+  }, [
+    editor,
+    initialNote,
+    cleanedMarkdown,
+    hints,
+    transcriptText,
+    initialSegments,
+  ]);
 
   // --- Stream finalised + partial text at insertPos ---------------------
   useEffect(() => {
