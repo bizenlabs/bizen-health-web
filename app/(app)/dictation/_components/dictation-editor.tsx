@@ -968,7 +968,7 @@ export function DictationEditor({
   }
 
   return (
-    <div className="flex flex-col lg:h-full lg:overflow-hidden">
+    <div className="flex flex-col">
       {voided ? (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
           This dictation has been deleted — it is read-only.
@@ -1203,10 +1203,7 @@ export function DictationEditor({
       {/* Body — fills the remaining height, scrolls within. The editor stays
           mounted and is hidden on the Transcript tab so its state survives the
           switch; the raw transcript renders read-only alongside it. */}
-      <div
-        ref={scrollRef}
-        className="pb-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
-      >
+      <div ref={scrollRef} className="pb-2">
         {editor ? (
           <>
             <div className={clsx(showTabs && activeTab !== "note" && "hidden")}>
