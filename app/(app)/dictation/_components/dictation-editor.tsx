@@ -31,7 +31,9 @@ import {
   Redo2,
   Underline as UnderlineIcon,
   Undo2,
+  Wand2,
 } from "lucide-react";
+import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import clsx from "clsx";
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -60,8 +62,14 @@ import {
   cleanTemplateForEditor,
   findFirstEmptyTextblock,
   insertHintNodes,
+  normalizeLabel,
   type TemplateHint,
 } from "./template-hints";
+import {
+  parseUtterance,
+  type VoiceCommand,
+  type VoiceOp,
+} from "@/lib/transcription/voice-commands";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
 // While the mic is live the editor is read-only and finalised utterances are
@@ -80,6 +88,22 @@ const DEVICE_KEY = "bizen:dictation:device";
 // Carries the editor's cursor across the editing → resume-recording
 // navigation. Read once on the next mount and cleared.
 const CURSOR_KEY = "bizen:dictation:cursor";
+// Persisted voice-command preferences (per browser).
+const VOICE_COMMANDS_KEY = "bizen:dictation:voiceCommands";
+const PUNCTUATION_KEY = "bizen:dictation:spokenPunctuation";
+
+// Read a persisted boolean preference. Returns `fallback` on the server (no
+// localStorage) and when nothing is stored — the toggles only drive a control
+// that's rendered client-side while recording, so there's no hydration mismatch.
+function readStoredBool(key: string, fallback: boolean): boolean {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === "1";
+  } catch {
+    return fallback;
+  }
+}
 
 type Phase = "recording" | "editing" | "voided";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -122,13 +146,6 @@ function blockHasContent(editor: Editor, pos: number): boolean {
   }
 }
 
-function joinSegments(segs: { text: string }[]): string {
-  return segs
-    .map((s) => s.text.trim())
-    .filter(Boolean)
-    .join(" ");
-}
-
 /** Text of the nearest heading at or above `pos` — the section `pos` sits in. */
 function sectionLabelAt(editor: Editor, pos: number): string | null {
   let label: string | null = null;
@@ -143,6 +160,125 @@ function sectionLabelAt(editor: Editor, pos: number): string | null {
     return true;
   });
   return label;
+}
+
+// --- Section navigation (for "next section" / "go to <name>" commands) -----
+//
+// Sections are delimited by top-level Markdown headings — the same definition
+// `sectionLabelAt` uses to drive the "Dictating into <section>" strip, so voice
+// navigation and the on-screen label stay consistent. (Templates that label
+// sections with bold paragraphs rather than headings aren't navigable — a
+// pre-existing limitation of the heading-based section model.)
+
+interface SectionHeading {
+  offset: number;
+  nodeSize: number;
+  text: string;
+}
+
+function sectionHeadings(editor: Editor): SectionHeading[] {
+  const out: SectionHeading[] = [];
+  editor.state.doc.forEach((node, offset) => {
+    if (node.type.name === "heading") {
+      out.push({
+        offset,
+        nodeSize: node.nodeSize,
+        text: node.textContent.trim(),
+      });
+    }
+  });
+  return out;
+}
+
+/** Index of the section `pos` sits in, or -1 if it's before the first heading. */
+function currentSectionIndex(headings: SectionHeading[], pos: number): number {
+  let idx = -1;
+  for (let i = 0; i < headings.length; i++) {
+    if (headings[i].offset < pos) idx = i;
+    else break;
+  }
+  return idx;
+}
+
+/** Where dictation should land within a section: its first empty block, else
+ *  its first block, else just inside the heading line. */
+function sectionInsertPos(
+  editor: Editor,
+  index: number,
+  headings: SectionHeading[],
+): number {
+  const h = headings[index];
+  const from = h.offset + h.nodeSize;
+  const until = headings[index + 1]?.offset ?? editor.state.doc.content.size;
+  let firstAny: number | null = null;
+  let firstEmpty: number | null = null;
+  editor.state.doc.forEach((node, offset) => {
+    if (offset < from || offset >= until) return;
+    if (node.isTextblock) {
+      if (firstAny === null) firstAny = offset + 1;
+      if (firstEmpty === null && node.content.size === 0)
+        firstEmpty = offset + 1;
+    }
+  });
+  const pos = firstEmpty ?? firstAny;
+  if (pos !== null) return pos;
+  // No block between this heading and the next — land at the heading's end.
+  const max = Math.max(1, editor.state.doc.content.size - 1);
+  return Math.min(h.offset + h.nodeSize - 1, max);
+}
+
+function findNextSectionPos(editor: Editor, pos: number): number | null {
+  const hs = sectionHeadings(editor);
+  if (!hs.length) return null;
+  const next = currentSectionIndex(hs, pos) + 1;
+  return next < hs.length ? sectionInsertPos(editor, next, hs) : null;
+}
+
+function findPrevSectionPos(editor: Editor, pos: number): number | null {
+  const hs = sectionHeadings(editor);
+  if (!hs.length) return null;
+  const prev = currentSectionIndex(hs, pos) - 1;
+  return prev >= 0 ? sectionInsertPos(editor, prev, hs) : null;
+}
+
+/** Canonical form for matching a spoken section name to a heading. */
+function canonLabel(text: string): string {
+  return normalizeLabel(text)
+    .toLowerCase()
+    .replace(/[:.]+$/, "")
+    .trim();
+}
+
+/** Best-matching section for a spoken name: exact → substring → token overlap. */
+function findSectionByName(editor: Editor, target: string): number | null {
+  const hs = sectionHeadings(editor);
+  if (!hs.length) return null;
+  const want = canonLabel(target);
+  if (!want) return null;
+
+  let best = hs.findIndex((h) => canonLabel(h.text) === want);
+  if (best < 0) {
+    best = hs.findIndex((h) => {
+      const c = canonLabel(h.text);
+      return c.length > 0 && (c.includes(want) || want.includes(c));
+    });
+  }
+  if (best < 0) {
+    const wantWords = new Set(want.split(/\s+/).filter(Boolean));
+    let bestScore = 0;
+    hs.forEach((h, i) => {
+      const overlap = canonLabel(h.text)
+        .split(/\s+/)
+        .filter((w) => wantWords.has(w)).length;
+      if (overlap > bestScore) {
+        bestScore = overlap;
+        best = i;
+      }
+    });
+    if (bestScore === 0) best = -1;
+  }
+
+  return best >= 0 ? sectionInsertPos(editor, best, hs) : null;
 }
 
 export function DictationEditor({
@@ -204,6 +340,26 @@ export function DictationEditor({
   // The heading of the section dictation is currently landing in — shown while
   // recording so the clinician can see where the next utterances will go.
   const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  // Voice commands: spoken "new line", "next section", "scratch that", etc.
+  // become structure/navigation/editing actions instead of literal text. On by
+  // default; spoken punctuation is a separate opt-in since smart_format already
+  // punctuates. Refs mirror the state so the streaming effect reads them without
+  // a dependency.
+  const [voiceCommandsOn, setVoiceCommandsOn] = useState(() =>
+    readStoredBool(VOICE_COMMANDS_KEY, true),
+  );
+  const [punctuationOn, setPunctuationOn] = useState(() =>
+    readStoredBool(PUNCTUATION_KEY, false),
+  );
+  const voiceCommandsOnRef = useRef(voiceCommandsOn);
+  const punctuationOnRef = useRef(punctuationOn);
+  // Transient "command fired" confirmation shown in the recording HUD.
+  const [lastCommand, setLastCommand] = useState<{
+    label: string;
+    tone: "info" | "warn";
+  } | null>(null);
+  const commandClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // `phase` is derived, not stored — it has no transition the user can't
   // express as "voided / recording done / still recording". A paused session
@@ -278,6 +434,9 @@ export function DictationEditor({
   // Where the current tentative (italic) partial text lives so it can be
   // deleted before the next tick replaces it.
   const partialRangeRef = useRef<{ from: number; length: number } | null>(null);
+  // Range of the most recently committed dictation run, so "scratch that" can
+  // remove it. Cleared whenever a structural/navigation command moves the caret.
+  const lastInsertRangeRef = useRef<{ from: number; to: number } | null>(null);
 
   // Strip the template's `[placeholder]` / `(instruction)` helper text out of
   // the seeded Markdown and extract the bracket hints. The hints are rendered
@@ -483,6 +642,154 @@ export function DictationEditor({
     initialSegments,
   ]);
 
+  // --- Voice commands ---------------------------------------------------
+  // Keep the refs (read by the streaming effect) and localStorage in sync as
+  // the toggles change. Initial values are hydrated via lazy useState above.
+  useEffect(() => {
+    voiceCommandsOnRef.current = voiceCommandsOn;
+    try {
+      localStorage.setItem(VOICE_COMMANDS_KEY, voiceCommandsOn ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [voiceCommandsOn]);
+  useEffect(() => {
+    punctuationOnRef.current = punctuationOn;
+    try {
+      localStorage.setItem(PUNCTUATION_KEY, punctuationOn ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [punctuationOn]);
+  useEffect(() => {
+    return () => {
+      if (commandClearTimer.current) clearTimeout(commandClearTimer.current);
+    };
+  }, []);
+
+  // Flash a brief confirmation that a command fired. `warn` (amber) is for
+  // removals/edge cases (scratch, undo, "already at last section").
+  const flashCommand = useCallback(
+    (label: string, tone: "info" | "warn" = "info") => {
+      setLastCommand({ label, tone });
+      if (commandClearTimer.current) clearTimeout(commandClearTimer.current);
+      commandClearTimer.current = setTimeout(() => setLastCommand(null), 1800);
+    },
+    [],
+  );
+
+  // Insert a run of dictated text at insertPos, recording its range so a
+  // following "scratch that" can remove exactly it.
+  const insertText = useCallback(
+    (text: string) => {
+      if (!editor || insertPosRef.current === null || !text) return;
+      const from = insertPosRef.current;
+      const insert = (blockHasContent(editor, from) ? " " : "") + text;
+      editor.commands.insertContentAt(from, insert);
+      const to = from + insert.length;
+      insertPosRef.current = to;
+      lastInsertRangeRef.current = { from, to };
+    },
+    [editor],
+  );
+
+  // Map one parsed command onto a Tiptap/ProseMirror action.
+  const applyVoiceCommand = useCallback(
+    (command: VoiceCommand) => {
+      if (!editor || insertPosRef.current === null) return;
+      const docMax = () => Math.max(1, editor.state.doc.content.size - 1);
+      switch (command.kind) {
+        case "newline":
+        case "paragraph": {
+          const at = Math.min(Math.max(insertPosRef.current, 1), docMax());
+          editor.chain().setTextSelection(at).splitBlock().run();
+          insertPosRef.current = editor.state.selection.from;
+          lastInsertRangeRef.current = null;
+          flashCommand(
+            command.kind === "paragraph" ? "New paragraph" : "New line",
+          );
+          break;
+        }
+        case "nextSection": {
+          const pos = findNextSectionPos(editor, insertPosRef.current);
+          if (pos !== null) {
+            insertPosRef.current = pos;
+            lastInsertRangeRef.current = null;
+            const label = sectionLabelAt(editor, pos);
+            flashCommand(label ? `→ ${label}` : "Next section");
+          } else {
+            flashCommand("Already at last section", "warn");
+          }
+          break;
+        }
+        case "prevSection": {
+          const pos = findPrevSectionPos(editor, insertPosRef.current);
+          if (pos !== null) {
+            insertPosRef.current = pos;
+            lastInsertRangeRef.current = null;
+            const label = sectionLabelAt(editor, pos);
+            flashCommand(label ? `→ ${label}` : "Previous section");
+          } else {
+            flashCommand("Already at first section", "warn");
+          }
+          break;
+        }
+        case "gotoSection": {
+          const pos = findSectionByName(editor, command.target);
+          if (pos !== null) {
+            insertPosRef.current = pos;
+            lastInsertRangeRef.current = null;
+            const label = sectionLabelAt(editor, pos);
+            flashCommand(label ? `→ ${label}` : `→ ${command.target}`);
+          } else {
+            // No section matched — don't swallow the words; treat as dictation.
+            insertText(command.raw);
+          }
+          break;
+        }
+        case "scratchThat": {
+          const r = lastInsertRangeRef.current;
+          if (r) {
+            editor.commands.deleteRange({ from: r.from, to: r.to });
+            insertPosRef.current = r.from;
+            lastInsertRangeRef.current = null;
+            flashCommand("Scratched", "warn");
+          } else {
+            flashCommand("Nothing to scratch", "warn");
+          }
+          break;
+        }
+        case "undo": {
+          editor.commands.undo();
+          insertPosRef.current = Math.min(insertPosRef.current, docMax());
+          lastInsertRangeRef.current = null;
+          flashCommand("Undid", "warn");
+          break;
+        }
+      }
+    },
+    [editor, insertText, flashCommand],
+  );
+
+  // Process newly-finalised utterances: parse each into ops, then insert text
+  // or run commands in order. Shared by the streaming effect and handleStop so a
+  // command spoken right before Stop is honoured, not dumped as literal text.
+  const flushSegments = useCallback(
+    (segs: { text: string }[]) => {
+      if (!editor || insertPosRef.current === null) return;
+      for (const seg of segs) {
+        const ops: VoiceOp[] = voiceCommandsOnRef.current
+          ? parseUtterance(seg.text, { punctuation: punctuationOnRef.current })
+          : [{ type: "text", text: seg.text.trim() }];
+        for (const op of ops) {
+          if (op.type === "text") insertText(op.text);
+          else applyVoiceCommand(op.command);
+        }
+      }
+    },
+    [editor, insertText, applyVoiceCommand],
+  );
+
   // --- Stream finalised + partial text at insertPos ---------------------
   useEffect(() => {
     if (!editor || !initRef.current || phase !== "recording") return;
@@ -499,17 +806,12 @@ export function DictationEditor({
       partialRangeRef.current = null;
     }
 
-    // Insert anything newly finalised at insertPos, advancing it past the
-    // inserted text so the next chunk continues where this one ended.
+    // Insert anything newly finalised at insertPos (running any voice commands
+    // it carries), advancing insertPos past it for the next chunk.
     if (segments.length > processedSegCountRef.current) {
-      const text = joinSegments(segments.slice(processedSegCountRef.current));
+      const newSegs = segments.slice(processedSegCountRef.current);
       processedSegCountRef.current = segments.length;
-      if (text) {
-        const from = insertPosRef.current;
-        const insert = (blockHasContent(editor, from) ? " " : "") + text;
-        editor.commands.insertContentAt(from, insert);
-        insertPosRef.current = from + insert.length;
-      }
+      flushSegments(newSegs);
     }
 
     // Re-show the live partial at the (possibly advanced) insertPos.
@@ -537,7 +839,7 @@ export function DictationEditor({
         /* coordsAtPos can throw mid-transaction — skip the scroll */
       }
     }
-  }, [editor, phase, segments, partial]);
+  }, [editor, phase, segments, partial, flushSegments]);
 
   // Track which section the insertion point sits in so the status strip can
   // show "Dictating into <section>". Runs after the stream effect above has
@@ -603,22 +905,16 @@ export function DictationEditor({
         });
         partialRangeRef.current = null;
       }
-      // Insert anything finalised but not yet picked up by the stream effect.
+      // Insert anything finalised but not yet picked up by the stream effect —
+      // including a trailing command (e.g. "next section") said just before Stop.
       const finalSegments = result?.segments ?? segments;
       if (
         finalSegments.length > processedSegCountRef.current &&
         insertPosRef.current !== null
       ) {
-        const text = joinSegments(
-          finalSegments.slice(processedSegCountRef.current),
-        );
+        const newSegs = finalSegments.slice(processedSegCountRef.current);
         processedSegCountRef.current = finalSegments.length;
-        if (text) {
-          const from = insertPosRef.current;
-          const insert = (blockHasContent(editor, from) ? " " : "") + text;
-          editor.commands.insertContentAt(from, insert);
-          insertPosRef.current = from + insert.length;
-        }
+        flushSegments(newSegs);
       }
       resetHistory(editor);
       void doSave(editor.getMarkdown());
@@ -713,6 +1009,12 @@ export function DictationEditor({
                   onChange={handleDeviceChange}
                   disabled={state === "starting"}
                   showSingle
+                />
+                <VoiceCommandControl
+                  enabled={voiceCommandsOn}
+                  onToggle={() => setVoiceCommandsOn((v) => !v)}
+                  punctuation={punctuationOn}
+                  onTogglePunctuation={() => setPunctuationOn((v) => !v)}
                 />
                 {paused ? (
                   <button
@@ -815,6 +1117,18 @@ export function DictationEditor({
             <span className="hidden items-center gap-1 text-[10px] tracking-wide text-zinc-400 sm:flex dark:text-zinc-500">
               <span aria-hidden="true">→</span>
               <span className="max-w-[12rem] truncate">{activeSection}</span>
+            </span>
+          ) : null}
+          {lastCommand ? (
+            <span
+              className={clsx(
+                "ml-auto inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide",
+                lastCommand.tone === "warn"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+              )}
+            >
+              {lastCommand.label}
             </span>
           ) : null}
         </div>
@@ -1022,6 +1336,131 @@ function MicPicker({
         ))}
       </select>
     </span>
+  );
+}
+
+// The voice-command control: a toggle for spoken commands plus a reference of
+// the phrases it understands. Shown only while recording. Defaults on — the
+// matching is whole-utterance for the risky commands, so false fires are rare —
+// with spoken punctuation as a separate opt-in (smart_format already punctuates).
+const COMMAND_REFERENCE: { group: string; phrases: string[] }[] = [
+  { group: "Structure", phrases: ["new line", "new paragraph"] },
+  {
+    group: "Navigation",
+    phrases: ["next section", "previous section", "go to <section>"],
+  },
+  { group: "Editing", phrases: ["scratch that", "undo"] },
+];
+
+function VoiceCommandControl({
+  enabled,
+  onToggle,
+  punctuation,
+  onTogglePunctuation,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+  punctuation: boolean;
+  onTogglePunctuation: () => void;
+}) {
+  return (
+    <Popover className="relative">
+      <PopoverButton
+        className={clsx(
+          "inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-sm font-medium transition-colors focus:outline-none",
+          enabled
+            ? "border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-300 dark:hover:bg-blue-950/40"
+            : "border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900",
+        )}
+        title="Voice commands"
+      >
+        <Wand2 aria-hidden="true" className="size-4" />
+        <span className="hidden sm:inline">Commands</span>
+      </PopoverButton>
+      <PopoverPanel
+        anchor="bottom end"
+        className="z-40 mt-1 w-64 rounded-xl border border-zinc-200 bg-white p-3 text-sm shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <SettingSwitch
+          label="Voice commands"
+          checked={enabled}
+          onChange={onToggle}
+        />
+        {enabled ? (
+          <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+            {COMMAND_REFERENCE.map((g) => (
+              <div key={g.group}>
+                <p className="font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+                  {g.group}
+                </p>
+                <ul className="mt-0.5 flex flex-wrap gap-1">
+                  {g.phrases.map((p) => (
+                    <li
+                      key={p}
+                      className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                    >
+                      “{p}”
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <SettingSwitch
+            label="Spoken punctuation"
+            checked={punctuation}
+            onChange={onTogglePunctuation}
+          />
+          <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+            Say “period”, “comma”, etc. Off by default — auto-punctuation is
+            already on.
+          </p>
+        </div>
+      </PopoverPanel>
+    </Popover>
+  );
+}
+
+// A compact label + toggle row used inside the voice-command panel.
+function SettingSwitch({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className="flex w-full items-center justify-between gap-3 text-left"
+    >
+      <span className="font-medium text-zinc-700 dark:text-zinc-200">
+        {label}
+      </span>
+      <span
+        aria-hidden="true"
+        className={clsx(
+          "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+          checked
+            ? "bg-blue-600 dark:bg-blue-500"
+            : "bg-zinc-200 dark:bg-zinc-700",
+        )}
+      >
+        <span
+          className={clsx(
+            "inline-block size-4 transform rounded-full bg-white shadow transition-transform",
+            checked ? "translate-x-4" : "translate-x-0.5",
+          )}
+        />
+      </span>
+    </button>
   );
 }
 
