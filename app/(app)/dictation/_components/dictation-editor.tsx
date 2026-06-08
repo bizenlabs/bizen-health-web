@@ -968,7 +968,7 @@ export function DictationEditor({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex flex-col lg:h-full lg:overflow-hidden">
       {voided ? (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
           This dictation has been deleted — it is read-only.
@@ -1203,7 +1203,10 @@ export function DictationEditor({
       {/* Body — fills the remaining height, scrolls within. The editor stays
           mounted and is hidden on the Transcript tab so its state survives the
           switch; the raw transcript renders read-only alongside it. */}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto pb-2">
+      <div
+        ref={scrollRef}
+        className="pb-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+      >
         {editor ? (
           <>
             <div className={clsx(showTabs && activeTab !== "note" && "hidden")}>
@@ -1664,7 +1667,7 @@ function Toolbar({
   const alt = isMac ? "⌥" : "Alt+";
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-0.5 border-y border-zinc-100 py-1.5 dark:border-zinc-800/80">
+    <div className="sticky top-0 z-10 mt-3 flex flex-wrap items-center gap-0.5 border-y border-zinc-100 bg-white py-1.5 dark:border-zinc-800/80 dark:bg-zinc-900">
       <ToolBtn
         icon={Bold}
         label="Bold"
