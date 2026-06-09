@@ -42,6 +42,10 @@ function buildListenUrl(diarize: boolean): string {
     model: "nova-3-medical",
     interim_results: "true",
     smart_format: "true",
+    // Abbreviate spoken metric units in transcripts: "centimeter" → "cm",
+    // "milligram" → "mg", etc. Independent of smart_format (no conflict, unlike
+    // `numerals`). Covers metric mass/volume/length only.
+    measurements: "true",
     encoding: "linear16",
     sample_rate: "16000",
     channels: "1",
