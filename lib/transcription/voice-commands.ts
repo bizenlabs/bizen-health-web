@@ -75,10 +75,16 @@ const WHOLE_UTTERANCE: Array<{
 ];
 
 // Inline whitespace commands (Tier A) — low false-positive risk, spliced where
-// they appear in the utterance.
+// they appear in the utterance. The trailing `[.,!?;:]*` absorbs punctuation
+// that smart_format appends to the spoken command (e.g. "new line" comes back
+// as "New line."); without it that stray "." would survive as a text op and
+// land at the start of the new line/paragraph.
 const INLINE: Array<{ pattern: RegExp; command: VoiceCommand }> = [
-  { pattern: /\bnew paragraph\b/gi, command: { kind: "paragraph" } },
-  { pattern: /\b(?:new line|line break)\b/gi, command: { kind: "newline" } },
+  { pattern: /\bnew paragraph\b[.,!?;:]*/gi, command: { kind: "paragraph" } },
+  {
+    pattern: /\b(?:new line|line break)\b[.,!?;:]*/gi,
+    command: { kind: "newline" },
+  },
 ];
 
 /** Build a case-insensitive word-boundary pattern for a phrase. */

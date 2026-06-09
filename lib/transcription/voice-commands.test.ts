@@ -86,6 +86,20 @@ describe("parseUtterance — inline whitespace commands", () => {
     expect(cmds(parseUtterance("new line"))).toEqual(["newline"]);
   });
 
+  it("does not leave a stray '.' when smart_format punctuates the command", () => {
+    const ops = parseUtterance("New line.");
+    expect(cmds(ops)).toEqual(["newline"]);
+    expect(texts(ops)).toEqual([]);
+  });
+
+  it("absorbs punctuation on a mid-sentence break without dropping prose", () => {
+    const ops = parseUtterance(
+      "vitals are stable. New paragraph. Patient calm",
+    );
+    expect(cmds(ops)).toEqual(["paragraph"]);
+    expect(texts(ops)).toEqual(["vitals are stable.", "Patient calm"]);
+  });
+
   it("splits text around a mid-sentence 'new paragraph'", () => {
     const ops = parseUtterance(
       "vitals are stable new paragraph patient reports",
