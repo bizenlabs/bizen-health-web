@@ -1,4 +1,5 @@
 import type { Editor } from "@tiptap/react";
+import { tableLineIndices } from "@/lib/markdown-table";
 
 // Template helper text — `[placeholder]` and `(instruction)` — is authored
 // into the template body purely as guidance. It must NOT become editable
@@ -46,10 +47,22 @@ export function normalizeLabel(text: string): string {
 export function cleanTemplateForEditor(rawBody: string): CleanedTemplate {
   const hints: TemplateHint[] = [];
   const lines = rawBody.split("\n");
+  // Pipe-table rows are passed through verbatim: their `[placeholder]` cells
+  // are meant to seed the table as editable cell text, not to be stripped into
+  // ghost hints (an empty table reads as broken, not as guidance).
+  const tableLines = tableLineIndices(lines);
   const cleanedLines: string[] = [];
   let lastNonEmptyText = "";
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (tableLines.has(i)) {
+      cleanedLines.push(line);
+      lastNonEmptyText = line.trim();
+      continue;
+    }
+
     const trimmed = line.trim();
 
     // Drop lines that are entirely a parenthetical instruction.

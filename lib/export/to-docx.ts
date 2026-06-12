@@ -22,6 +22,10 @@ export async function blocksToDocxBlob(
     Packer,
     Paragraph,
     TextRun,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
     HeadingLevel,
     LevelFormat,
     AlignmentType,
@@ -172,7 +176,41 @@ export async function blocksToDocxBlob(
             },
           }),
         ];
+
+      // Tables are not paragraphs; they're built at the top level (buildTable)
+      // and pushed straight into the section body.
+      case "table":
+        return [];
     }
+  }
+
+  // A `table` block → docx Table. Header cells are shaded and bolded; one
+  // paragraph per cell carries the (already-styled) inline runs.
+  function buildTable(
+    block: Extract<Block, { kind: "table" }>,
+  ): InstanceType<typeof Table> {
+    return new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: block.rows.map(
+        (row) =>
+          new TableRow({
+            tableHeader: row.length > 0 && row.every((c) => c.header),
+            children: row.map(
+              (cell) =>
+                new TableCell({
+                  shading: cell.header ? { fill: "F4F4F5" } : undefined,
+                  children: [
+                    new Paragraph({
+                      children: cell.runs.flatMap((run) =>
+                        toTextRuns(cell.header ? { ...run, bold: true } : run),
+                      ),
+                    }),
+                  ],
+                }),
+            ),
+          }),
+      ),
+    });
   }
 
   function renderList(
@@ -219,7 +257,8 @@ export async function blocksToDocxBlob(
   }
 
   // --- document ---------------------------------------------------------
-  const body: InstanceType<typeof Paragraph>[] = [];
+  const body: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] =
+    [];
 
   body.push(
     new Paragraph({
@@ -239,7 +278,8 @@ export async function blocksToDocxBlob(
   }
 
   for (const block of blocks) {
-    body.push(...renderBlock(block));
+    if (block.kind === "table") body.push(buildTable(block));
+    else body.push(...renderBlock(block));
   }
 
   const doc = new Document({

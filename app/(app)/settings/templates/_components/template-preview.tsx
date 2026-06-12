@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { findTableBlocks } from "@/lib/markdown-table";
 
 /**
  * Renders a template body the way it reads as a finished note — a lightweight,
@@ -84,7 +85,76 @@ function PreviewLine({ line }: { line: string }) {
   return <p className="leading-relaxed">{renderInline(line)}</p>;
 }
 
+// A GFM pipe table — rendered as a real bordered table so the preview reads
+// the way the finished note (and its PDF/DOCX export) will. Cell text runs
+// through `renderInline`, so `[placeholder]` chips and **bold** show in cells.
+function PreviewTable({
+  header,
+  rows,
+}: {
+  header: string[];
+  rows: string[][];
+}) {
+  const cols = header.length;
+  return (
+    <div className="my-2 overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr>
+            {header.map((cell, i) => (
+              <th
+                key={i}
+                className="border border-zinc-200 bg-zinc-50 px-2 py-1 text-left font-semibold dark:border-zinc-700 dark:bg-zinc-800/60"
+              >
+                {renderInline(cell)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, r) => (
+            <tr key={r}>
+              {Array.from({ length: cols }, (_, c) => (
+                <td
+                  key={c}
+                  className="border border-zinc-200 px-2 py-1 align-top dark:border-zinc-700"
+                >
+                  {renderInline(row[c] ?? "")}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function TemplatePreview({ content }: { content: string }) {
+  // Normalise CRLF/CR — browsers submit <textarea> values with \r\n, and a
+  // stray \r breaks the `$` anchor in the line patterns.
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+  const tables = findTableBlocks(lines);
+  // Map each table's start line to the block, and collect the lines it spans.
+  const tableByStart = new Map(tables.map((t) => [t.start, t]));
+  const inTable = new Set<number>();
+  for (const t of tables) {
+    for (let i = t.start; i <= t.end; i++) inTable.add(i);
+  }
+
+  const nodes: ReactNode[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const table = tableByStart.get(i);
+    if (table) {
+      nodes.push(
+        <PreviewTable key={i} header={table.header} rows={table.rows} />,
+      );
+      continue;
+    }
+    if (inTable.has(i)) continue; // delimiter/body lines consumed by the table
+    nodes.push(<PreviewLine key={i} line={lines[i]} />);
+  }
+
   return (
     <div className="mt-1 h-[34rem] w-full overflow-auto rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
       {content.trim() === "" ? (
@@ -92,16 +162,7 @@ export function TemplatePreview({ content }: { content: string }) {
           Nothing to preview yet — type a template body to see it here.
         </p>
       ) : (
-        <div className="space-y-1">
-          {/* Normalise CRLF/CR — browsers submit <textarea> values with \r\n,
-              and a stray \r breaks the `$` anchor in the line patterns. */}
-          {content
-            .replace(/\r\n?/g, "\n")
-            .split("\n")
-            .map((line, i) => (
-              <PreviewLine key={i} line={line} />
-            ))}
-        </div>
+        <div className="space-y-1">{nodes}</div>
       )}
     </div>
   );

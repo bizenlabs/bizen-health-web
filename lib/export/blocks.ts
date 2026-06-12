@@ -19,11 +19,15 @@ export type InlineRun = {
 
 export type ListItem = Block[];
 
+export type TableCellModel = { header: boolean; runs: InlineRun[] };
+export type TableRowModel = TableCellModel[];
+
 export type Block =
   | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; runs: InlineRun[] }
   | { kind: "paragraph"; runs: InlineRun[] }
   | { kind: "blockquote"; children: Block[] }
   | { kind: "list"; ordered: boolean; start: number; items: ListItem[] }
+  | { kind: "table"; rows: TableRowModel[] }
   | { kind: "codeBlock"; text: string }
   | { kind: "rule" };
 
@@ -91,6 +95,31 @@ function listItem(node: PMNode): ListItem {
   return blocksFrom(node.content);
 }
 
+// A table cell's content is block-level (usually a single paragraph). Flatten
+// it to one run sequence, joining multiple paragraphs with a newline.
+function cellRuns(cell: PMNode): InlineRun[] {
+  const runs: InlineRun[] = [];
+  for (const block of cell.content ?? []) {
+    if (runs.length) runs.push({ text: "\n" });
+    runs.push(...inlineRuns(block.content));
+  }
+  return runs;
+}
+
+function tableRows(node: PMNode): TableRowModel[] {
+  const rows: TableRowModel[] = [];
+  for (const row of node.content ?? []) {
+    if (row.type !== "tableRow") continue;
+    rows.push(
+      (row.content ?? []).map((cell) => ({
+        header: cell.type === "tableHeader",
+        runs: cellRuns(cell),
+      })),
+    );
+  }
+  return rows;
+}
+
 function blockFrom(node: PMNode): Block | Block[] | null {
   switch (node.type) {
     case "heading":
@@ -117,6 +146,8 @@ function blockFrom(node: PMNode): Block | Block[] | null {
         start: typeof node.attrs?.start === "number" ? node.attrs.start : 1,
         items: (node.content ?? []).map(listItem),
       };
+    case "table":
+      return { kind: "table", rows: tableRows(node) };
     case "codeBlock":
       return { kind: "codeBlock", text: codeText(node.content) };
     case "horizontalRule":
@@ -156,6 +187,8 @@ export function isEmptyDocument(blocks: Block[]): boolean {
           return walk(b.children);
         case "list":
           return b.items.some(walk);
+        case "table":
+          return b.rows.some((row) => row.some((cell) => hasText(cell.runs)));
         case "codeBlock":
           return b.text.trim().length > 0;
         case "rule":

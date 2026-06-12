@@ -28,7 +28,11 @@ import {
   List,
   ListOrdered,
   type LucideIcon,
+  Minus,
+  Plus,
   Redo2,
+  Table as TableIcon,
+  Trash2,
   Underline as UnderlineIcon,
   Undo2,
   Wand2,
@@ -41,6 +45,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import { Markdown } from "@tiptap/markdown";
 import { EditorState } from "@tiptap/pm/state";
+import { TableExtensions } from "@/lib/editor/table";
 import {
   editTranscriptionNoteAction,
   reopenTranscriptionAction,
@@ -466,6 +471,7 @@ export function DictationEditor({
       StarterKit,
       Underline,
       Markdown,
+      ...TableExtensions,
       EmptySectionDimmer,
       Placeholder.configure({
         placeholder: placeholderFn,
@@ -1724,6 +1730,38 @@ function Toolbar({
         active={editor.isActive("orderedList")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
       />
+      <ToolSep />
+      <ToolBtn
+        icon={TableIcon}
+        label="Insert table"
+        active={editor.isActive("table")}
+        onClick={() =>
+          editor
+            .chain()
+            .focus()
+            .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+            .run()
+        }
+      />
+      {editor.isActive("table") ? (
+        <>
+          <ToolBtn
+            icon={Plus}
+            label="Add row"
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+          />
+          <ToolBtn
+            icon={Minus}
+            label="Delete row"
+            onClick={() => editor.chain().focus().deleteRow().run()}
+          />
+          <ToolBtn
+            icon={Trash2}
+            label="Delete table"
+            onClick={() => editor.chain().focus().deleteTable().run()}
+          />
+        </>
+      ) : null}
       <ToolSep />
       <ToolBtn
         icon={Undo2}

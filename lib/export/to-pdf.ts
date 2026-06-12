@@ -56,6 +56,37 @@ function renderBlock(block: Block): Content[] {
           : { ul: block.items.map(listEntry), style: "list" },
       ];
 
+    case "table": {
+      const cols = block.rows.reduce((m, r) => Math.max(m, r.length), 1);
+      const body = block.rows.map((row) =>
+        Array.from({ length: cols }, (_, c) => {
+          const cell = row[c];
+          if (!cell) return { text: "" };
+          return {
+            text: cell.runs.map(inline),
+            ...(cell.header ? { bold: true, fillColor: "#f4f4f5" } : {}),
+          };
+        }),
+      );
+      const hasHeader = block.rows[0]?.every((c) => c.header) ?? false;
+      return [
+        {
+          table: {
+            headerRows: hasHeader ? 1 : 0,
+            widths: Array.from({ length: cols }, () => "*"),
+            body,
+          },
+          layout: {
+            hLineWidth: () => 0.5,
+            vLineWidth: () => 0.5,
+            hLineColor: () => "#d4d4d8",
+            vLineColor: () => "#d4d4d8",
+          },
+          margin: [0, 2, 0, 8],
+        },
+      ];
+    }
+
     case "blockquote":
       return [
         {
