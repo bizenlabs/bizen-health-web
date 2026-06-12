@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
+import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown, MarkdownManager } from "@tiptap/markdown";
 import { TableExtensions } from "./table";
+
+describe("table schema roles", () => {
+  // prosemirror-tables drives every editing command (add/delete row+column,
+  // Tab navigation, cell selection) off `spec.tableRole`. extendNodeSchema is a
+  // GLOBAL hook, so a naive per-node constant tags all four nodes the same and
+  // silently breaks editing while leaving rendering/markdown intact — this
+  // guards that regression.
+  const schema = getSchema([StarterKit, ...TableExtensions]);
+  it.each([
+    ["table", "table"],
+    ["tableRow", "row"],
+    ["tableHeader", "header_cell"],
+    ["tableCell", "cell"],
+  ])("%s has tableRole %s", (node, expectedRole) => {
+    expect(schema.nodes[node].spec.tableRole).toBe(expectedRole);
+  });
+});
 
 // Exercises the actual table node handlers (not a replica) through the same
 // MarkdownManager the editor uses, so the clinical-note save path — seed via

@@ -30,14 +30,25 @@ import {
 // how to (de)serialise a pipe table — so the `table` node carries explicit
 // `parseMarkdown` / `renderMarkdown` handlers that @tiptap/markdown discovers.
 
-// prosemirror-tables reads `tableRole` off each node's schema spec. Tiptap
-// merges whatever `extendNodeSchema` returns into the NodeSpec, but types that
-// return as `Partial<NodeConfig>` (which has no `tableRole`), so the role is
-// injected through a narrow cast isolated here.
+// prosemirror-tables reads `tableRole` off each node's schema spec. Tiptap's
+// `extendNodeSchema` is a GLOBAL hook — it runs once per node in the schema and
+// merges its return into that node's spec — so a single handler keyed on the
+// node name sets the right role on each of the four table nodes (and nothing on
+// the rest). Defining it per-node with a constant would not work: every node's
+// extendNodeSchema runs against every node, so the last one would win and tag
+// all of them identically. Cast isolates the custom `tableRole` spec field,
+// which Tiptap's types (Partial<NodeConfig>) don't know about.
 type TableRole = "table" | "row" | "cell" | "header_cell";
-function role(tableRole: TableRole): NodeConfig["extendNodeSchema"] {
-  return (() => ({ tableRole })) as unknown as NodeConfig["extendNodeSchema"];
-}
+const TABLE_ROLES: Record<string, TableRole> = {
+  table: "table",
+  tableRow: "row",
+  tableHeader: "header_cell",
+  tableCell: "cell",
+};
+const tableRoleSchema = ((extension: { name: string }) => {
+  const tableRole = TABLE_ROLES[extension.name];
+  return tableRole ? { tableRole } : {};
+}) as unknown as NodeConfig["extendNodeSchema"];
 
 // A bare ProseMirror command — prosemirror-tables' column/row ops have this
 // shape. `dispatch` is omitted when Tiptap probes via `editor.can()`.
@@ -79,7 +90,6 @@ function cellMarkdown(
 export const TableRow = Node.create({
   name: "tableRow",
   content: "(tableCell | tableHeader)*",
-  extendNodeSchema: role("row"),
   parseHTML: () => [{ tag: "tr" }],
   renderHTML: ({ HTMLAttributes }) => [
     "tr",
@@ -92,7 +102,6 @@ export const TableHeader = Node.create({
   name: "tableHeader",
   content: "block+",
   isolating: true,
-  extendNodeSchema: role("header_cell"),
   addAttributes: () => cellAttributes,
   parseHTML: () => [{ tag: "th" }],
   renderHTML: ({ HTMLAttributes }) => [
@@ -106,7 +115,6 @@ export const TableCell = Node.create({
   name: "tableCell",
   content: "block+",
   isolating: true,
-  extendNodeSchema: role("cell"),
   addAttributes: () => cellAttributes,
   parseHTML: () => [{ tag: "td" }],
   renderHTML: ({ HTMLAttributes }) => [
@@ -121,7 +129,7 @@ export const Table = Node.create({
   content: "tableRow+",
   isolating: true,
   group: "block",
-  extendNodeSchema: role("table"),
+  extendNodeSchema: tableRoleSchema,
   parseHTML: () => [{ tag: "table" }],
   renderHTML: ({ HTMLAttributes }) => [
     "table",
