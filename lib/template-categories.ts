@@ -15,6 +15,7 @@ export const TEMPLATE_CATEGORIES = [
   "PROCEDURE",
   "DISCHARGE",
   "REFERRAL",
+  "PRESCRIPTION",
   "DICTATION",
   "OTHER",
 ] as const;
@@ -29,6 +30,7 @@ export const CATEGORY_LABEL: Record<TemplateCategory, string> = {
   PROCEDURE: "Procedure note",
   DISCHARGE: "Discharge summary",
   REFERRAL: "Referral letter",
+  PRESCRIPTION: "Prescription",
   DICTATION: "Dictation",
   OTHER: "Other",
 };
