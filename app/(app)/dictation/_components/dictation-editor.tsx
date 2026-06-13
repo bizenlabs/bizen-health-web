@@ -18,8 +18,11 @@ import {
   StopIcon,
 } from "@heroicons/react/20/solid";
 import {
+  BetweenHorizontalEnd,
+  BetweenVerticalEnd,
   Bold,
   Check,
+  Columns3,
   Copy,
   Heading1,
   Heading2,
@@ -28,9 +31,8 @@ import {
   List,
   ListOrdered,
   type LucideIcon,
-  Minus,
-  Plus,
   Redo2,
+  Rows3,
   Table as TableIcon,
   Trash2,
   Underline as UnderlineIcon,
@@ -1766,14 +1768,24 @@ function Toolbar({
       {editor.isActive("table") ? (
         <>
           <ToolBtn
-            icon={Plus}
+            icon={BetweenHorizontalEnd}
             label="Add row"
             onClick={() => editor.chain().focus().addRowAfter().run()}
           />
           <ToolBtn
-            icon={Minus}
+            icon={Rows3}
             label="Delete row"
             onClick={() => editor.chain().focus().deleteRow().run()}
+          />
+          <ToolBtn
+            icon={BetweenVerticalEnd}
+            label="Add column"
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+          />
+          <ToolBtn
+            icon={Columns3}
+            label="Delete column"
+            onClick={() => editor.chain().focus().deleteColumn().run()}
           />
           <ToolBtn
             icon={Trash2}
