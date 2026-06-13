@@ -57,10 +57,15 @@ type PMCommand = (
   dispatch?: (tr: Transaction) => void,
 ) => boolean;
 
-// Shared colspan/rowspan/colwidth attributes for both cell node types.
+// Shared attributes for both cell node types.
 const cellAttributes = {
   colspan: { default: 1 },
   rowspan: { default: 1 },
+  // Ghost-hint text for a cell whose template body was purely a [placeholder].
+  // Set on seeding (see applyTableCellPlaceholders); surfaced as placeholder
+  // text by the dictation editor and never written to HTML or Markdown, so it
+  // can't end up in a saved note.
+  placeholder: { default: null, rendered: false },
   colwidth: {
     default: null,
     parseHTML: (el: HTMLElement) => {

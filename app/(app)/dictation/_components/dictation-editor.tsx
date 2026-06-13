@@ -64,6 +64,7 @@ import { DictationTitle } from "./dictation-title";
 import { DictationCaret, dictationCaretKey } from "./dictation-caret";
 import { EmptySectionDimmer } from "./empty-section-dimmer";
 import {
+  applyTableCellPlaceholders,
   buildPlaceholderFn,
   cleanTemplateForEditor,
   findFirstEmptyTextblock,
@@ -603,8 +604,12 @@ export function DictationEditor({
     }
 
     // Create the empty section nodes the extracted hints attach to, so each
-    // section shows its guidance as non-editable placeholder ghost text.
-    if (seedingTemplate) insertHintNodes(editor, hints);
+    // section shows its guidance as non-editable placeholder ghost text — and
+    // do the same for pure-[placeholder] table cells (empty cell + ghost hint).
+    if (seedingTemplate) {
+      insertHintNodes(editor, hints);
+      applyTableCellPlaceholders(editor);
+    }
 
     // Where dictation should land.
     let pos: number | null = null;

@@ -130,6 +130,14 @@ body {
 .ProseMirror th > p {
   margin: 0;
 }
+/* A placeholder hint inside a cell must size the cell. The global
+   `.is-empty::before` uses height:0 + float (so a single-line section slot
+   keeps its line height), which makes a wrapping cell hint overlap the next
+   row — let it flow normally here instead. */
+.ProseMirror :is(td, th) .is-empty::before {
+  float: none;
+  height: auto;
+}
 .ProseMirror .selectedCell::after {
   content: "";
   position: absolute;

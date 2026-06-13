@@ -163,6 +163,71 @@ export function insertHintNodes(editor: Editor, hints: TemplateHint[]): void {
   editor.view.dispatch(tr);
 }
 
+const CELL_TYPES = new Set(["tableCell", "tableHeader"]);
+
+/**
+ * Classify a table cell's text: extract the `[bracket]` hints and report
+ * whether anything *meaningful* (a label, a number) remains once brackets and
+ * `(instructions)` are stripped. A cell with a hint and no meaningful text is a
+ * pure placeholder — it should seed empty with ghost guidance, exactly like a
+ * section slot. Mirrors the line handling in {@link cleanTemplateForEditor}.
+ */
+export function cellHint(text: string): { hint: string; meaningful: string } {
+  let cleaned = text.replace(/\s*\([^)]+\)\s*/g, "");
+  const brackets: string[] = [];
+  for (const match of cleaned.matchAll(/\[([^\]]+)\]/g))
+    brackets.push(match[1]);
+  cleaned = cleaned.replace(/\s*\[[^\]]+\]\s*/g, " ").replace(/\s+/g, " ");
+  const meaningful = cleaned.replace(/^[\s\-—*+\d.#]+$/, "").trim();
+  return { hint: brackets.join(" — "), meaningful };
+}
+
+/**
+ * Turn pure-`[placeholder]` table cells into empty cells whose hint is stashed
+ * on the cell's `placeholder` attribute — so a seeded table reads as a fillable
+ * grid with ghost guidance, not as literal bracket text that would otherwise be
+ * saved into the note. Cells that carry real content (header labels, the row
+ * number) are left untouched. No-history transaction, like {@link insertHintNodes}.
+ */
+export function applyTableCellPlaceholders(editor: Editor): void {
+  const targets: { pos: number; nodeSize: number; hint: string }[] = [];
+  editor.state.doc.descendants((node, pos) => {
+    if (!CELL_TYPES.has(node.type.name)) return undefined;
+    const { hint, meaningful } = cellHint(node.textContent);
+    if (hint && !meaningful)
+      targets.push({ pos, nodeSize: node.nodeSize, hint });
+    return false; // a cell is handled whole — don't descend into it
+  });
+  if (!targets.length) return;
+
+  const { tr } = editor.state;
+  const paragraph = editor.schema.nodes.paragraph;
+  // Bottom-up so each cell's original positions stay valid as content shrinks.
+  for (let i = targets.length - 1; i >= 0; i--) {
+    const { pos, nodeSize, hint } = targets[i];
+    tr.setNodeAttribute(pos, "placeholder", hint);
+    tr.replaceWith(pos + 1, pos + nodeSize - 1, paragraph.create());
+  }
+  tr.setMeta("addToHistory", false);
+  editor.view.dispatch(tr);
+}
+
+/** The `placeholder` hint stashed on the table cell enclosing `pos`, if any. */
+function cellPlaceholderAt(editor: Editor, pos: number): string | null {
+  try {
+    const $pos = editor.state.doc.resolve(pos + 1);
+    for (let d = $pos.depth; d > 0; d--) {
+      const name = $pos.node(d).type.name;
+      if (name === "tableCell" || name === "tableHeader") {
+        return ($pos.node(d).attrs.placeholder as string | null) ?? null;
+      }
+    }
+  } catch {
+    /* a stale position can throw on resolve — no hint */
+  }
+  return null;
+}
+
 /**
  * Build the function passed to Tiptap's Placeholder extension. It maps each
  * empty textblock to the hint that belongs to its section, so every empty
@@ -187,6 +252,11 @@ export function buildPlaceholderFn(
 
   return ({ node, pos, editor }) => {
     if (node.textContent.length > 0) return "";
+
+    // A placeholder cell carries its own hint on the enclosing cell node — that
+    // takes precedence over (and is independent of) the section-slot matching.
+    const cellPlaceholder = cellPlaceholderAt(editor, pos);
+    if (cellPlaceholder) return cellPlaceholder;
 
     const hints = hintsRef.current;
     if (!hints || hints.length === 0) {
