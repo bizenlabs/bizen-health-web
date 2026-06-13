@@ -61,6 +61,7 @@ import {
 import { DictationDeleteButton } from "./dictation-delete-button";
 import { DictationExportMenu } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
+import { DictationCaret, dictationCaretKey } from "./dictation-caret";
 import { EmptySectionDimmer } from "./empty-section-dimmer";
 import {
   buildPlaceholderFn,
@@ -473,6 +474,7 @@ export function DictationEditor({
       Markdown,
       ...TableExtensions,
       EmptySectionDimmer,
+      DictationCaret,
       Placeholder.configure({
         placeholder: placeholderFn,
         // Hints attach to every empty section node, not just the focused one,
@@ -857,6 +859,19 @@ export function DictationEditor({
     }
     const label = sectionLabelAt(editor, insertPosRef.current);
     setActiveSection((prev) => (prev === label ? prev : label));
+  }, [editor, phase, paused, segments, partial]);
+
+  // Show a blinking caret at the live insertion point while the mic is running
+  // (the editor is read-only then, so there's no native caret). Hidden while
+  // paused/editing, where the editor is editable and shows its own caret. Same
+  // deps as the section tracker so it picks up every insertPos advance — the
+  // stream effect above has already moved it by the time this runs.
+  useEffect(() => {
+    if (!editor) return;
+    const show = phase === "recording" && !paused;
+    const pos = show ? insertPosRef.current : null;
+    if (dictationCaretKey.getState(editor.state) === pos) return;
+    editor.view.dispatch(editor.state.tr.setMeta(dictationCaretKey, pos));
   }, [editor, phase, paused, segments, partial]);
 
   // Editable while editing, and while *paused* — a paused session mutes the
