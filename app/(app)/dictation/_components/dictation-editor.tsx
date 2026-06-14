@@ -1140,236 +1140,242 @@ export function DictationEditor({
 
   return (
     <div className="flex flex-col">
-      {voided ? (
-        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-          This dictation has been deleted — it is read-only.
-        </p>
-      ) : null}
+      {/* Sticky chrome — keep the lifecycle controls (Stop/Pause/Resume/Delete),
+          the recording HUD, banners, tabs and the formatting toolbar pinned to
+          the top so they stay reachable however long the note grows; only the
+          note body below scrolls under it. */}
+      <div className="sticky top-0 z-20 bg-white dark:bg-zinc-900">
+        {voided ? (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            This dictation has been deleted — it is read-only.
+          </p>
+        ) : null}
 
-      {/* Page header — dictation name and the recording controls share one
+        {/* Page header — dictation name and the recording controls share one
           line, with the timestamp beneath. */}
-      <header className="shrink-0">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="min-w-0">
-            <Link
-              href="/dictation"
-              className="inline-flex items-center gap-1 font-mono text-[11px] font-medium tracking-[0.15em] text-zinc-400 uppercase transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-            >
-              <ChevronLeftIcon className="size-3.5" />
-              Dictation
-            </Link>
-            <DictationTitle
-              transcriptionId={transcriptionId}
-              title={title}
-              fallbackLabel={templateName ?? "Free-form dictation"}
-              editable={!voided}
-            />
-          </div>
+        <header className="shrink-0">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0">
+              <Link
+                href="/dictation"
+                className="inline-flex items-center gap-1 font-mono text-[11px] font-medium tracking-[0.15em] text-zinc-400 uppercase transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+              >
+                <ChevronLeftIcon className="size-3.5" />
+                Dictation
+              </Link>
+              <DictationTitle
+                transcriptionId={transcriptionId}
+                title={title}
+                fallbackLabel={templateName ?? "Free-form dictation"}
+                editable={!voided}
+              />
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
-            {recording ? (
-              <>
-                <LevelMeter
-                  getLevel={getLevel}
-                  active={state === "recording"}
-                />
-                <MicPicker
-                  devices={devices}
-                  selectedDeviceId={selectedDeviceId}
-                  hasLabels={hasLabels}
-                  onChange={handleDeviceChange}
-                  disabled={state === "starting"}
-                  showSingle
-                />
-                <VoiceCommandControl
-                  enabled={voiceCommandsOn}
-                  onToggle={() => setVoiceCommandsOn((v) => !v)}
-                  punctuation={punctuationOn}
-                  onTogglePunctuation={() => setPunctuationOn((v) => !v)}
-                />
-                {paused ? (
-                  <button
-                    type="button"
-                    onClick={handleSessionResume}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-                  >
-                    <PlayIcon aria-hidden="true" className="size-4" />
-                    Resume
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={pause}
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:gap-3">
+              {recording ? (
+                <>
+                  <LevelMeter
+                    getLevel={getLevel}
+                    active={state === "recording"}
+                  />
+                  <MicPicker
+                    devices={devices}
+                    selectedDeviceId={selectedDeviceId}
+                    hasLabels={hasLabels}
+                    onChange={handleDeviceChange}
                     disabled={state === "starting"}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                  >
-                    <PauseIcon aria-hidden="true" className="size-4" />
-                    Pause
-                  </button>
-                )}
-                {/* Stop ends recording — a soft red outline, the familiar
+                    showSingle
+                  />
+                  <VoiceCommandControl
+                    enabled={voiceCommandsOn}
+                    onToggle={() => setVoiceCommandsOn((v) => !v)}
+                    punctuation={punctuationOn}
+                    onTogglePunctuation={() => setPunctuationOn((v) => !v)}
+                  />
+                  {paused ? (
+                    <button
+                      type="button"
+                      onClick={handleSessionResume}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                    >
+                      <PlayIcon aria-hidden="true" className="size-4" />
+                      Resume
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={pause}
+                      disabled={state === "starting"}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    >
+                      <PauseIcon aria-hidden="true" className="size-4" />
+                      Pause
+                    </button>
+                  )}
+                  {/* Stop ends recording — a soft red outline, the familiar
                     stop-recording cue. (Distinct from Delete, which is a filled
                     destructive control.) */}
-                <button
-                  type="button"
-                  onClick={() => void handleStop()}
-                  disabled={state === "starting"}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
-                >
-                  <StopIcon aria-hidden="true" className="size-4" />
-                  {state === "starting" ? "Starting…" : "Stop"}
-                </button>
-              </>
-            ) : phase === "editing" ? (
-              <>
-                <MicPicker
-                  devices={devices}
-                  selectedDeviceId={selectedDeviceId}
-                  hasLabels={hasLabels}
-                  onChange={handleDeviceChange}
-                  disabled={resuming}
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleResume()}
-                  disabled={resuming}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-                >
-                  <MicrophoneIcon aria-hidden="true" className="size-4" />
-                  {resuming ? "Resuming…" : "Resume"}
-                </button>
-              </>
-            ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleStop()}
+                    disabled={state === "starting"}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3.5 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
+                  >
+                    <StopIcon aria-hidden="true" className="size-4" />
+                    {state === "starting" ? "Starting…" : "Stop"}
+                  </button>
+                </>
+              ) : phase === "editing" ? (
+                <>
+                  <MicPicker
+                    devices={devices}
+                    selectedDeviceId={selectedDeviceId}
+                    hasLabels={hasLabels}
+                    onChange={handleDeviceChange}
+                    disabled={resuming}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleResume()}
+                    disabled={resuming}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3.5 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                  >
+                    <MicrophoneIcon aria-hidden="true" className="size-4" />
+                    {resuming ? "Resuming…" : "Resume"}
+                  </button>
+                </>
+              ) : null}
 
-            {/* No delete control mid-recording — the session must be stopped
+              {/* No delete control mid-recording — the session must be stopped
                 first; afterwards it can be deleted (and restored) freely. */}
-            {recording ? null : (
-              <DictationDeleteButton
-                transcriptionId={transcriptionId}
-                voided={voided}
-              />
-            )}
+              {recording ? null : (
+                <DictationDeleteButton
+                  transcriptionId={transcriptionId}
+                  voided={voided}
+                />
+              )}
+            </div>
           </div>
-        </div>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          {startedAtLabel}
-        </p>
-      </header>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {startedAtLabel}
+          </p>
+        </header>
 
-      {/* Divider between the header and the note surface */}
-      <hr className="mt-3 border-t border-zinc-200 dark:border-zinc-800" />
+        {/* Divider between the header and the note surface */}
+        <hr className="mt-3 border-t border-zinc-200 dark:border-zinc-800" />
 
-      {/* Recording HUD — shown only while the mic session is live. The editing
+        {/* Recording HUD — shown only while the mic session is live. The editing
           view has no equivalent strip: the Note/Transcript tabs convey the
           mode and the save status lives in the toolbar. */}
-      {recording ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-center gap-2 pt-2"
-        >
-          <span
-            aria-hidden="true"
-            className={clsx(
-              "size-1.5 rounded-full",
-              paused ? "bg-amber-500" : "animate-pulse bg-red-500",
-            )}
-          />
-          <span className="font-mono text-[10px] font-medium tracking-[0.2em] text-zinc-400 uppercase dark:text-zinc-500">
-            {paused ? "Paused" : "Recording"}
-          </span>
-          <span
-            aria-hidden="true"
-            className="font-mono text-[10px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500"
+        {recording ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-2 pt-2"
           >
-            {formatDuration(elapsedMs)}
-          </span>
-          {activeSection ? (
-            <span className="hidden items-center gap-1 text-[10px] tracking-wide text-zinc-400 sm:flex dark:text-zinc-500">
-              <span aria-hidden="true">→</span>
-              <span className="max-w-[12rem] truncate">{activeSection}</span>
-            </span>
-          ) : null}
-          {lastCommand ? (
             <span
+              aria-hidden="true"
               className={clsx(
-                "ml-auto inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide",
-                lastCommand.tone === "warn"
-                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+                "size-1.5 rounded-full",
+                paused ? "bg-amber-500" : "animate-pulse bg-red-500",
               )}
-            >
-              {lastCommand.label}
+            />
+            <span className="font-mono text-[10px] font-medium tracking-[0.2em] text-zinc-400 uppercase dark:text-zinc-500">
+              {paused ? "Paused" : "Recording"}
             </span>
-          ) : null}
-        </div>
-      ) : null}
+            <span
+              aria-hidden="true"
+              className="font-mono text-[10px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500"
+            >
+              {formatDuration(elapsedMs)}
+            </span>
+            {activeSection ? (
+              <span className="hidden items-center gap-1 text-[10px] tracking-wide text-zinc-400 sm:flex dark:text-zinc-500">
+                <span aria-hidden="true">→</span>
+                <span className="max-w-[12rem] truncate">{activeSection}</span>
+              </span>
+            ) : null}
+            {lastCommand ? (
+              <span
+                className={clsx(
+                  "ml-auto inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide",
+                  lastCommand.tone === "warn"
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
+                )}
+              >
+                {lastCommand.label}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
-      {error || resumeError ? (
-        <p
-          role="alert"
-          className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
-        >
-          {error ?? resumeError}
-        </p>
-      ) : null}
+        {error || resumeError ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+          >
+            {error ?? resumeError}
+          </p>
+        ) : null}
 
-      {/* A failed auto-save is data-loss-adjacent for a clinical note, so it
+        {/* A failed auto-save is data-loss-adjacent for a clinical note, so it
           gets a visible banner with a retry — not just the quiet strip text.
           The edit is still in the editor; Retry re-sends the current content. */}
-      {saveStatus === "error" ? (
-        <div
-          role="alert"
-          className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
-        >
-          <span>
-            Couldn&rsquo;t save your note. Your changes are still here — retry
-            to save them.
-          </span>
-          <button
-            type="button"
-            onClick={handleRetrySave}
-            className="shrink-0 rounded-md border border-red-300 px-2.5 py-1 font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+        {saveStatus === "error" ? (
+          <div
+            role="alert"
+            className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
           >
-            Retry
-          </button>
-        </div>
-      ) : null}
+            <span>
+              Couldn&rsquo;t save your note. Your changes are still here — retry
+              to save them.
+            </span>
+            <button
+              type="button"
+              onClick={handleRetrySave}
+              className="shrink-0 rounded-md border border-red-300 px-2.5 py-1 font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
 
-      {/* Note / Transcript tabs — only after recording has stopped */}
-      {showTabs ? (
-        <div
-          role="tablist"
-          className="mt-3 flex gap-x-6 border-b border-zinc-200 text-sm font-semibold dark:border-zinc-800"
-        >
-          <TabBtn
-            active={activeTab === "note"}
-            onClick={() => setActiveTab("note")}
+        {/* Note / Transcript tabs — only after recording has stopped */}
+        {showTabs ? (
+          <div
+            role="tablist"
+            className="mt-3 flex gap-x-6 border-b border-zinc-200 text-sm font-semibold dark:border-zinc-800"
           >
-            Note
-          </TabBtn>
-          <TabBtn
-            active={activeTab === "transcript"}
-            onClick={() => setActiveTab("transcript")}
-          >
-            Transcript
-          </TabBtn>
-        </div>
-      ) : null}
+            <TabBtn
+              active={activeTab === "note"}
+              onClick={() => setActiveTab("note")}
+            >
+              Note
+            </TabBtn>
+            <TabBtn
+              active={activeTab === "transcript"}
+              onClick={() => setActiveTab("transcript")}
+            >
+              Transcript
+            </TabBtn>
+          </div>
+        ) : null}
 
-      {/* Toolbar — editable note view only (editing or paused) */}
-      {(phase === "editing" || paused) && editor && activeTab === "note" ? (
-        <Toolbar
-          editor={editor}
-          documentTitle={title ?? templateName ?? "Free-form dictation"}
-          documentSubtitle={startedAtLabel}
-          saveStatus={saveStatus}
-          lastSavedAt={lastSavedAt}
-          now={now}
-        />
-      ) : !showTabs ? (
-        <div className="mt-3" />
-      ) : null}
+        {/* Toolbar — editable note view only (editing or paused) */}
+        {(phase === "editing" || paused) && editor && activeTab === "note" ? (
+          <Toolbar
+            editor={editor}
+            documentTitle={title ?? templateName ?? "Free-form dictation"}
+            documentSubtitle={startedAtLabel}
+            saveStatus={saveStatus}
+            lastSavedAt={lastSavedAt}
+            now={now}
+          />
+        ) : !showTabs ? (
+          <div className="mt-3" />
+        ) : null}
+      </div>
 
       {/* Body — fills the remaining height, scrolls within. The editor stays
           mounted and is hidden on the Transcript tab so its state survives the
@@ -1849,7 +1855,7 @@ function Toolbar({
   const alt = isMac ? "⌥" : "Alt+";
 
   return (
-    <div className="sticky top-0 z-10 mt-3 flex flex-wrap items-center gap-0.5 border-y border-zinc-100 bg-white py-1.5 dark:border-zinc-800/80 dark:bg-zinc-900">
+    <div className="mt-3 flex flex-wrap items-center gap-0.5 border-y border-zinc-100 bg-white py-1.5 dark:border-zinc-800/80 dark:bg-zinc-900">
       <ToolBtn
         icon={Bold}
         label="Bold"
