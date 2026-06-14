@@ -28,7 +28,19 @@ export type VoiceCommand =
   | { kind: "prevSection" }
   | { kind: "gotoSection"; target: string; raw: string }
   | { kind: "scratchThat" }
-  | { kind: "undo" };
+  | { kind: "undo" }
+  // Table navigation/editing (Tier B — whole-utterance only). The editor maps
+  // these onto prosemirror-tables actions and no-ops (with a warning flash)
+  // when the dictation point isn't inside a table.
+  | { kind: "nextCell" }
+  | { kind: "prevCell" }
+  | { kind: "cellUp" }
+  | { kind: "cellDown" }
+  | { kind: "nextRow" }
+  | { kind: "addRow" }
+  | { kind: "addColumn" }
+  | { kind: "deleteRow" }
+  | { kind: "deleteColumn" };
 
 export type VoiceOp =
   | { type: "text"; text: string }
@@ -72,6 +84,47 @@ const WHOLE_UTTERANCE: Array<{
     command: () => ({ kind: "scratchThat" }),
   },
   { pattern: /^undo(?: that)?$/i, command: () => ({ kind: "undo" }) },
+  // --- Table navigation/editing. Each is fully anchored and mutually
+  // exclusive from the section commands above ("next cell"/"next row" share no
+  // words with "next section"). "tab" is intentionally NOT a synonym — a lone
+  // spoken "tab" (e.g. a tablet) would misfire too easily in a clinical note.
+  {
+    pattern: /^(?:next cell|next column)$/i,
+    command: () => ({ kind: "nextCell" }),
+  },
+  {
+    pattern:
+      /^(?:previous cell|prior cell|last cell|back a cell|previous column)$/i,
+    command: () => ({ kind: "prevCell" }),
+  },
+  {
+    pattern: /^(?:cell up|up a cell|cell above)$/i,
+    command: () => ({ kind: "cellUp" }),
+  },
+  {
+    pattern: /^(?:cell down|down a cell|cell below)$/i,
+    command: () => ({ kind: "cellDown" }),
+  },
+  {
+    pattern: /^(?:next row|new row|down a row)$/i,
+    command: () => ({ kind: "nextRow" }),
+  },
+  {
+    pattern: /^(?:add(?: a)? row|insert(?: a)? row|add row below)$/i,
+    command: () => ({ kind: "addRow" }),
+  },
+  {
+    pattern: /^(?:add(?: a)? column|insert(?: a)? column)$/i,
+    command: () => ({ kind: "addColumn" }),
+  },
+  {
+    pattern: /^(?:delete(?: this)? row|remove(?: this)? row)$/i,
+    command: () => ({ kind: "deleteRow" }),
+  },
+  {
+    pattern: /^(?:delete(?: this)? column|remove(?: this)? column)$/i,
+    command: () => ({ kind: "deleteColumn" }),
+  },
 ];
 
 // Inline whitespace commands (Tier A) — low false-positive risk, spliced where

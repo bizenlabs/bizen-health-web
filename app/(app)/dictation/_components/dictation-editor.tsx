@@ -46,7 +46,8 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import { Markdown } from "@tiptap/markdown";
-import { EditorState } from "@tiptap/pm/state";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { cellAround, goToNextCell, TableMap } from "@tiptap/pm/tables";
 import { TableExtensions } from "@/lib/editor/table";
 import {
   editTranscriptionNoteAction,
@@ -288,6 +289,39 @@ function findSectionByName(editor: Editor, target: string): number | null {
   }
 
   return best >= 0 ? sectionInsertPos(editor, best, hs) : null;
+}
+
+// --- Table cell navigation (for the table voice commands) ------------------
+//
+// prosemirror-tables ships horizontal cell movement (goToNextCell) but no
+// vertical move, so this computes the target cell via TableMap — the same map
+// goToNextCell uses internally — and drops a text selection into it. The
+// dictation point is then resynced from that selection by the caller.
+//
+// Moves `rowDelta` rows from the cell the current selection sits in, keeping the
+// same column unless `targetCol` is given ("next row" pins column 0). Returns
+// false when the selection isn't in a table or the target row is out of bounds.
+function moveToCell(
+  editor: Editor,
+  rowDelta: number,
+  targetCol: number | null = null,
+): boolean {
+  const { state, view } = editor;
+  const $cell = cellAround(state.selection.$from);
+  if (!$cell) return false;
+  const table = $cell.node(-1);
+  const tableStart = $cell.start(-1);
+  const map = TableMap.get(table);
+  const rect = map.findCell($cell.pos - tableStart);
+  const row = rect.top + rowDelta;
+  if (row < 0 || row >= map.height) return false;
+  const col = Math.min(targetCol ?? rect.left, map.width - 1);
+  const offset = map.positionAt(row, col, table);
+  const $target = state.doc.resolve(tableStart + offset);
+  view.dispatch(
+    state.tr.setSelection(TextSelection.near($target, 1)).scrollIntoView(),
+  );
+  return true;
 }
 
 export function DictationEditor({
@@ -779,6 +813,115 @@ export function DictationEditor({
           insertPosRef.current = Math.min(insertPosRef.current, docMax());
           lastInsertRangeRef.current = null;
           flashCommand("Undid", "warn");
+          break;
+        }
+        // --- Table commands. Each seeds the selection at the dictation point,
+        // runs a prosemirror-tables action, then resyncs insertPos from the
+        // resulting selection. The editor is read-only while recording, so the
+        // selection has to be placed before isActive("table") is meaningful.
+        case "nextCell":
+        case "prevCell": {
+          const dir = command.kind === "nextCell" ? 1 : -1;
+          const at = Math.min(Math.max(insertPosRef.current, 1), docMax());
+          editor.commands.setTextSelection(at);
+          if (!editor.isActive("table")) {
+            flashCommand("Not in a table", "warn");
+            break;
+          }
+          const moved = goToNextCell(dir)(editor.state, editor.view.dispatch);
+          if (moved) {
+            insertPosRef.current = editor.state.selection.from;
+            lastInsertRangeRef.current = null;
+            flashCommand(dir === 1 ? "Next cell" : "Previous cell");
+          } else {
+            flashCommand(dir === 1 ? "At last cell" : "At first cell", "warn");
+          }
+          break;
+        }
+        case "cellUp":
+        case "cellDown": {
+          const dir = command.kind === "cellDown" ? 1 : -1;
+          const at = Math.min(Math.max(insertPosRef.current, 1), docMax());
+          editor.commands.setTextSelection(at);
+          if (!editor.isActive("table")) {
+            flashCommand("Not in a table", "warn");
+            break;
+          }
+          if (moveToCell(editor, dir)) {
+            insertPosRef.current = editor.state.selection.from;
+            lastInsertRangeRef.current = null;
+            flashCommand(dir === 1 ? "Cell down" : "Cell up");
+          } else {
+            flashCommand(dir === 1 ? "At bottom row" : "At top row", "warn");
+          }
+          break;
+        }
+        case "nextRow": {
+          const at = Math.min(Math.max(insertPosRef.current, 1), docMax());
+          editor.commands.setTextSelection(at);
+          if (!editor.isActive("table")) {
+            flashCommand("Not in a table", "warn");
+            break;
+          }
+          if (moveToCell(editor, 1, 0)) {
+            flashCommand("Next row");
+          } else {
+            // Last row — grow the table and drop into the new row's first cell.
+            editor.commands.addRowAfter();
+            moveToCell(editor, 1, 0);
+            flashCommand("New row");
+          }
+          insertPosRef.current = editor.state.selection.from;
+          lastInsertRangeRef.current = null;
+          break;
+        }
+        case "addRow": {
+          const at = Math.min(Math.max(insertPosRef.current, 1), docMax());
+          editor.commands.setTextSelection(at);
+          if (!editor.isActive("table")) {
+            flashCommand("Not in a table", "warn");
+            break;
+          }
+          editor.commands.addRowAfter();
+          moveToCell(editor, 1);
+          insertPosRef.current = editor.state.selection.from;
+          lastInsertRangeRef.current = null;
+          flashCommand("Row added");
+          break;
+        }
+        case "addColumn": {
+          const at = Math.min(Math.max(insertPosRef.current, 1), docMax());
+          editor.commands.setTextSelection(at);
+          if (!editor.isActive("table")) {
+            flashCommand("Not in a table", "warn");
+            break;
+          }
+          editor.commands.addColumnAfter();
+          goToNextCell(1)(editor.state, editor.view.dispatch);
+          insertPosRef.current = editor.state.selection.from;
+          lastInsertRangeRef.current = null;
+          flashCommand("Column added");
+          break;
+        }
+        case "deleteRow":
+        case "deleteColumn": {
+          const at = Math.min(Math.max(insertPosRef.current, 1), docMax());
+          editor.commands.setTextSelection(at);
+          if (!editor.isActive("table")) {
+            flashCommand("Not in a table", "warn");
+            break;
+          }
+          if (command.kind === "deleteRow") editor.commands.deleteRow();
+          else editor.commands.deleteColumn();
+          insertPosRef.current = Math.min(
+            editor.state.selection.from,
+            docMax(),
+          );
+          lastInsertRangeRef.current = null;
+          flashCommand(
+            command.kind === "deleteRow" ? "Row deleted" : "Column deleted",
+            "warn",
+          );
           break;
         }
       }
@@ -1378,6 +1521,20 @@ const COMMAND_REFERENCE: { group: string; phrases: string[] }[] = [
     phrases: ["next section", "previous section", "go to <section>"],
   },
   { group: "Editing", phrases: ["scratch that", "undo"] },
+  {
+    group: "Table",
+    phrases: [
+      "next cell",
+      "previous cell",
+      "next row",
+      "cell up",
+      "cell down",
+      "add row",
+      "add column",
+      "delete row",
+      "delete column",
+    ],
+  },
 ];
 
 function VoiceCommandControl({

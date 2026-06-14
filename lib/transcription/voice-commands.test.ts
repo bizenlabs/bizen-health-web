@@ -115,6 +115,67 @@ describe("parseUtterance — inline whitespace commands", () => {
   });
 });
 
+describe("parseUtterance — table navigation", () => {
+  it("fires nextCell on its phrases", () => {
+    expect(cmds(parseUtterance("next cell"))).toEqual(["nextCell"]);
+    expect(cmds(parseUtterance("next column"))).toEqual(["nextCell"]);
+  });
+
+  it("fires prevCell on its variants", () => {
+    expect(cmds(parseUtterance("previous cell"))).toEqual(["prevCell"]);
+    expect(cmds(parseUtterance("prior cell"))).toEqual(["prevCell"]);
+    expect(cmds(parseUtterance("back a cell"))).toEqual(["prevCell"]);
+  });
+
+  it("fires cellUp / cellDown", () => {
+    expect(cmds(parseUtterance("cell up"))).toEqual(["cellUp"]);
+    expect(cmds(parseUtterance("up a cell"))).toEqual(["cellUp"]);
+    expect(cmds(parseUtterance("cell down"))).toEqual(["cellDown"]);
+    expect(cmds(parseUtterance("cell below"))).toEqual(["cellDown"]);
+  });
+
+  it("fires nextRow on its phrases", () => {
+    expect(cmds(parseUtterance("next row"))).toEqual(["nextRow"]);
+    expect(cmds(parseUtterance("new row"))).toEqual(["nextRow"]);
+    expect(cmds(parseUtterance("down a row"))).toEqual(["nextRow"]);
+  });
+
+  it("fires structural add/delete commands", () => {
+    expect(cmds(parseUtterance("add a row"))).toEqual(["addRow"]);
+    expect(cmds(parseUtterance("insert row"))).toEqual(["addRow"]);
+    expect(cmds(parseUtterance("add a column"))).toEqual(["addColumn"]);
+    expect(cmds(parseUtterance("delete row"))).toEqual(["deleteRow"]);
+    expect(cmds(parseUtterance("remove this row"))).toEqual(["deleteRow"]);
+    expect(cmds(parseUtterance("delete column"))).toEqual(["deleteColumn"]);
+  });
+
+  it("tolerates filler and trailing punctuation", () => {
+    expect(cmds(parseUtterance("okay, next cell please"))).toEqual([
+      "nextCell",
+    ]);
+    expect(cmds(parseUtterance("Next cell."))).toEqual(["nextCell"]);
+  });
+
+  it("still returns the command intact in punctuation mode", () => {
+    expect(cmds(parseUtterance("next cell", { punctuation: true }))).toEqual([
+      "nextCell",
+    ]);
+  });
+
+  it("does not fire on prose containing the phrases", () => {
+    expect(
+      cmds(parseUtterance("the next cell of the colony was examined")),
+    ).toEqual([]);
+    expect(cmds(parseUtterance("we will add a row of sutures"))).toEqual([]);
+  });
+
+  it("keeps section and structure commands distinct from table ones", () => {
+    // Regression guards: similar-sounding commands resolve to their own kind.
+    expect(cmds(parseUtterance("next section"))).toEqual(["nextSection"]);
+    expect(cmds(parseUtterance("new paragraph"))).toEqual(["paragraph"]);
+  });
+});
+
 describe("parseUtterance — voice commands disabled / punctuation opt-in", () => {
   it("returns empty ops for blank input", () => {
     expect(parseUtterance("   ")).toEqual([]);
