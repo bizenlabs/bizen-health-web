@@ -288,9 +288,52 @@ function splitInline(text: string): VoiceOp[] {
 }
 
 /**
+ * Split a run of text into sentences on sentence-final punctuation followed by
+ * whitespace, keeping the punctuation with the sentence it ends. A "." inside a
+ * number ("0.5 mg") isn't followed by whitespace, so it doesn't split.
+ *
+ * This lets us recover a command Deepgram merged into the same final as dictated
+ * text — smart_format puts a sentence boundary between them ("75 mg. Next cell.")
+ * which whole-utterance matching would otherwise miss, dropping the command in as
+ * literal text.
+ */
+function splitSentences(text: string): string[] {
+  const out: string[] = [];
+  const boundary = /([.!?]+)(\s+)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = boundary.exec(text)) !== null) {
+    const end = m.index + m[1].length; // keep the punctuation with this sentence
+    out.push(text.slice(last, end).trim());
+    last = m.index + m[0].length; // resume past the whitespace
+  }
+  if (last < text.length) out.push(text.slice(last).trim());
+  return out.filter(Boolean);
+}
+
+/** Inline-split a text run and, when opted in, apply spoken punctuation. */
+function parseBody(text: string, opts?: ParseOptions): VoiceOp[] {
+  const ops = splitInline(text);
+  if (!opts?.punctuation) return ops;
+
+  return ops
+    .map((op) =>
+      op.type === "text"
+        ? ({ type: "text", text: applySpokenPunctuation(op.text) } as VoiceOp)
+        : op,
+    )
+    .filter((op) => op.type !== "text" || op.text.length > 0);
+}
+
+/**
  * Parse one finalised utterance into an ordered list of ops.
  *
  * - A whole-utterance command (navigation/editing) returns a single command op.
+ * - A multi-sentence utterance is segmented so a sentence that is *itself* a
+ *   command fires, even when Deepgram merged it with dictated text in one final
+ *   ("75 mg. Next cell." → text + nextCell). Each command sentence must still
+ *   match the anchored whole-utterance patterns, so prose merely *containing* a
+ *   command phrase ("we examined the next cell.") won't fire.
  * - Otherwise the text is split around inline whitespace commands, and — when
  *   `opts.punctuation` is set — spoken punctuation is applied to each text run.
  */
@@ -301,14 +344,16 @@ export function parseUtterance(text: string, opts?: ParseOptions): VoiceOp[] {
   const whole = matchWholeUtterance(trimmed);
   if (whole) return [{ type: "command", command: whole }];
 
-  const ops = splitInline(trimmed);
-  if (!opts?.punctuation) return ops;
+  const sentences = splitSentences(trimmed);
+  if (sentences.length > 1) {
+    const ops: VoiceOp[] = [];
+    for (const sentence of sentences) {
+      const cmd = matchWholeUtterance(sentence);
+      if (cmd) ops.push({ type: "command", command: cmd });
+      else ops.push(...parseBody(sentence, opts));
+    }
+    return ops;
+  }
 
-  return ops
-    .map((op) =>
-      op.type === "text"
-        ? ({ type: "text", text: applySpokenPunctuation(op.text) } as VoiceOp)
-        : op,
-    )
-    .filter((op) => op.type !== "text" || op.text.length > 0);
+  return parseBody(trimmed, opts);
 }

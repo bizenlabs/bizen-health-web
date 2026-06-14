@@ -176,6 +176,73 @@ describe("parseUtterance — table navigation", () => {
   });
 });
 
+describe("parseUtterance — command merged into a dictated final", () => {
+  it("peels a trailing command off dictated text", () => {
+    const ops = parseUtterance("75 milligrams. Next cell.");
+    expect(texts(ops)).toEqual(["75 milligrams."]);
+    expect(cmds(ops)).toEqual(["nextCell"]);
+  });
+
+  it("fires nextRow when merged after a value", () => {
+    expect(cmds(parseUtterance("aspirin given. Next row."))).toEqual([
+      "nextRow",
+    ]);
+  });
+
+  it("handles a command between two dictated sentences", () => {
+    const ops = parseUtterance("patient stable. Next cell. Aspirin given.");
+    expect(texts(ops)).toEqual(["patient stable.", "Aspirin given."]);
+    expect(cmds(ops)).toEqual(["nextCell"]);
+  });
+
+  it("does not fire when a command phrase is only part of a sentence", () => {
+    const ops = parseUtterance("we examined the next cell. it was empty.");
+    expect(cmds(ops)).toEqual([]);
+  });
+
+  it("does not split a decimal value mid-number", () => {
+    const ops = parseUtterance("dose is 0.5 mg. Next cell.");
+    expect(texts(ops)).toEqual(["dose is 0.5 mg."]);
+    expect(cmds(ops)).toEqual(["nextCell"]);
+  });
+});
+
+describe("parseUtterance — every command survives a trailing period / merge", () => {
+  // One representative phrase per command kind. Each must (a) fire on its own
+  // when smart_format appends a period, and (b) fire when Deepgram merges it
+  // into the same final as preceding dictated text.
+  const cases: { phrase: string; kind: string }[] = [
+    { phrase: "new line", kind: "newline" },
+    { phrase: "new paragraph", kind: "paragraph" },
+    { phrase: "next section", kind: "nextSection" },
+    { phrase: "previous section", kind: "prevSection" },
+    { phrase: "go to assessment", kind: "gotoSection" },
+    { phrase: "scratch that", kind: "scratchThat" },
+    { phrase: "undo", kind: "undo" },
+    { phrase: "next cell", kind: "nextCell" },
+    { phrase: "previous cell", kind: "prevCell" },
+    { phrase: "cell up", kind: "cellUp" },
+    { phrase: "cell down", kind: "cellDown" },
+    { phrase: "next row", kind: "nextRow" },
+    { phrase: "add a row", kind: "addRow" },
+    { phrase: "add a column", kind: "addColumn" },
+    { phrase: "delete row", kind: "deleteRow" },
+    { phrase: "delete column", kind: "deleteColumn" },
+  ];
+
+  for (const { phrase, kind } of cases) {
+    it(`'${phrase}' fires standalone with a trailing period`, () => {
+      expect(cmds(parseUtterance(`${phrase}.`))).toEqual([kind]);
+    });
+
+    it(`'${phrase}' fires when merged after dictated text`, () => {
+      const ops = parseUtterance(`noted. ${phrase}.`);
+      expect(cmds(ops)).toEqual([kind]);
+      expect(texts(ops)).toEqual(["noted."]);
+    });
+  }
+});
+
 describe("parseUtterance — voice commands disabled / punctuation opt-in", () => {
   it("returns empty ops for blank input", () => {
     expect(parseUtterance("   ")).toEqual([]);
