@@ -10,6 +10,7 @@ import {
   MicrophoneIcon,
   PencilSquareIcon,
   PlusIcon,
+  UserIcon,
 } from "@heroicons/react/20/solid";
 import clsx from "clsx";
 import type {
@@ -25,6 +26,7 @@ import { DictationRowDelete } from "./dictation-row-delete";
 // live/notable signal colour.
 
 const FREE_FORM = "__free-form__";
+const NO_PATIENT = "__no-patient__";
 
 const listVariants = {
   hidden: {},
@@ -84,12 +86,15 @@ function rowLabel(
 export function DictationLibrary({
   dictations,
   templateNames,
+  patientNames,
 }: {
   dictations: TranscriptionSummary[];
   templateNames: Record<string, string>;
+  patientNames: Record<string, string>;
 }) {
   const [search, setSearch] = useState("");
   const [templateFilter, setTemplateFilter] = useState("");
+  const [patientFilter, setPatientFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | TranscriptionStatus>(
     "",
   );
@@ -110,6 +115,22 @@ export function DictationLibrary({
     };
   }, [dictations, templateNames]);
 
+  // Patient filter options — only patients that actually appear in the list.
+  const patientOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    let hasUnlinked = false;
+    for (const d of dictations) {
+      if (!d.patientId) hasUnlinked = true;
+      else if (!seen.has(d.patientId)) {
+        seen.set(d.patientId, patientNames[d.patientId] ?? "Linked patient");
+      }
+    }
+    return {
+      hasUnlinked,
+      patients: [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+    };
+  }, [dictations, patientNames]);
+
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return dictations.filter((d) => {
@@ -122,11 +143,33 @@ export function DictationLibrary({
       ) {
         return false;
       }
-      if (needle && !rowLabel(d, templateNames).toLowerCase().includes(needle))
+      if (patientFilter === NO_PATIENT && d.patientId) return false;
+      if (
+        patientFilter &&
+        patientFilter !== NO_PATIENT &&
+        d.patientId !== patientFilter
+      ) {
         return false;
+      }
+      if (needle) {
+        const patientName = d.patientId
+          ? (patientNames[d.patientId] ?? "")
+          : "";
+        const haystack =
+          `${rowLabel(d, templateNames)} ${patientName}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
       return true;
     });
-  }, [dictations, search, templateFilter, statusFilter, templateNames]);
+  }, [
+    dictations,
+    search,
+    templateFilter,
+    patientFilter,
+    statusFilter,
+    templateNames,
+    patientNames,
+  ]);
 
   const groups = useMemo(() => {
     const sorted = [...filtered].sort(
@@ -241,6 +284,25 @@ export function DictationLibrary({
                 </option>
               ))}
             </select>
+            {patientOptions.patients.length > 0 ||
+            patientOptions.hasUnlinked ? (
+              <select
+                aria-label="Filter by patient"
+                value={patientFilter}
+                onChange={(e) => setPatientFilter(e.target.value)}
+                className="max-w-[12rem] rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-transparent dark:text-zinc-300"
+              >
+                <option value="">All patients</option>
+                {patientOptions.hasUnlinked ? (
+                  <option value={NO_PATIENT}>No patient</option>
+                ) : null}
+                {patientOptions.patients.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <select
               aria-label="Filter by status"
               value={statusFilter}
@@ -278,6 +340,12 @@ export function DictationLibrary({
                           <DictationRow
                             dictation={d}
                             label={rowLabel(d, templateNames)}
+                            patientName={
+                              d.patientId
+                                ? (patientNames[d.patientId] ??
+                                  "Linked patient")
+                                : null
+                            }
                             when={formatWhen(d.startedAt, group.key)}
                           />
                         </li>
@@ -297,10 +365,12 @@ export function DictationLibrary({
 function DictationRow({
   dictation: d,
   label,
+  patientName,
   when,
 }: {
   dictation: TranscriptionSummary;
   label: string;
+  patientName: string | null;
   when: string;
 }) {
   const TemplateGlyph = d.templateId ? DocumentTextIcon : PencilSquareIcon;
@@ -327,8 +397,19 @@ function DictationRow({
           >
             {label}
           </span>
-          <span className="mt-0.5 block font-mono text-[11px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500">
-            {when}
+          <span className="mt-0.5 flex items-center gap-2">
+            <span className="font-mono text-[11px] tracking-wide text-zinc-400 tabular-nums dark:text-zinc-500">
+              {when}
+            </span>
+            {patientName ? (
+              <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                <UserIcon
+                  aria-hidden="true"
+                  className="size-3 shrink-0 text-zinc-400 dark:text-zinc-500"
+                />
+                <span className="truncate">{patientName}</span>
+              </span>
+            ) : null}
           </span>
         </span>
         <StatusBadge dictation={d} />

@@ -14,6 +14,7 @@ import {
   renameTranscription,
   reopenTranscription,
   type SegmentInput,
+  setTranscriptionPatient,
   startTranscription,
   type StartTranscriptionInput,
   type TranscriptionDetail,
@@ -187,6 +188,19 @@ export async function renameTranscriptionAction(
   const result = await run(
     () => renameTranscription(transcriptionId, title),
     "Failed to rename the dictation.",
+  );
+  if (result.ok) revalidateFor(result.data);
+  return result;
+}
+
+export async function setTranscriptionPatientAction(
+  transcriptionId: string,
+  patientId: string | null,
+): Promise<ActionResult<TranscriptionDetail>> {
+  await requireSession();
+  const result = await run(
+    () => setTranscriptionPatient(transcriptionId, patientId),
+    "Failed to update the linked patient.",
   );
   if (result.ok) revalidateFor(result.data);
   return result;

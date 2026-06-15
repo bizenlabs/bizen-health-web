@@ -149,6 +149,14 @@ export const renameTranscription = (id: string, title: string | null) =>
     body: JSON.stringify({ title }),
   });
 
+// Link a dictation to a patient, or clear the link (null patientId). The
+// backend rejects this for encounter transcriptions (their patient is fixed).
+export const setTranscriptionPatient = (id: string, patientId: string | null) =>
+  api<TranscriptionDetail>(`/v1/transcriptions/${id}/patient`, {
+    method: "PATCH",
+    body: JSON.stringify({ patientId }),
+  });
+
 export const labelSpeaker = (id: string, speakerIndex: number, label: string) =>
   api<TranscriptionDetail>(
     `/v1/transcriptions/${id}/speakers/${speakerIndex}`,

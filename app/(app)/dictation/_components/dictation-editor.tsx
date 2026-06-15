@@ -16,6 +16,8 @@ import {
   PauseIcon,
   PlayIcon,
   StopIcon,
+  UserIcon,
+  UserPlusIcon,
 } from "@heroicons/react/20/solid";
 import {
   BetweenHorizontalEnd,
@@ -52,7 +54,12 @@ import { TableExtensions } from "@/lib/editor/table";
 import {
   editTranscriptionNoteAction,
   reopenTranscriptionAction,
+  setTranscriptionPatientAction,
 } from "@/app/(app)/transcription-actions";
+import { PatientPicker } from "@/components/patient-picker";
+import { patientMeta } from "@/lib/patient-display";
+import type { PatientSummary } from "@/lib/patients";
+import type { TranscriptionMode } from "@/lib/transcriptions";
 import {
   type LiveSegment,
   useTranscription,
@@ -331,6 +338,8 @@ export function DictationEditor({
   templateId,
   templateName,
   templateContent,
+  mode,
+  initialPatient,
   initialNote,
   transcriptText,
   initialSegments,
@@ -347,6 +356,11 @@ export function DictationEditor({
   // The template's Markdown scaffold — shown above the transcript so the
   // clinician dictates into the structure. Null for a free-form dictation.
   templateContent: string | null;
+  // Only DICTATION transcriptions allow (re)linking a patient here — an
+  // encounter transcription's patient is fixed to its encounter.
+  mode: TranscriptionMode;
+  // The patient currently linked to this dictation, if any.
+  initialPatient: PatientSummary | null;
   initialNote: string | null;
   transcriptText: string;
   // Finalised segments already on the session — seeded into a resumed
@@ -380,6 +394,11 @@ export function DictationEditor({
   const [resumeError, setResumeError] = useState<string | null>(null);
   // Whether the mic is muted at the source mid-recording (e.g. lid closed).
   const [micMuted, setMicMuted] = useState(false);
+  // The linked patient — editable here for dictations (encounter mode is fixed).
+  const [patient, setPatient] = useState<PatientSummary | null>(initialPatient);
+  const [editingPatient, setEditingPatient] = useState(false);
+  const [patientBusy, setPatientBusy] = useState(false);
+  const [patientError, setPatientError] = useState<string | null>(null);
   // Which pane the review view shows once recording has stopped: the editable
   // note, or the read-only raw transcript.
   const [activeTab, setActiveTab] = useState<"note" | "transcript">("note");
@@ -1155,6 +1174,28 @@ export function DictationEditor({
     }
   }
 
+  // Link, change, or clear the patient on this dictation. Persists immediately;
+  // the local state only advances if the server accepts it.
+  async function handleSetPatient(next: PatientSummary | null) {
+    setPatientBusy(true);
+    setPatientError(null);
+    const res = await setTranscriptionPatientAction(
+      transcriptionId,
+      next?.id ?? null,
+    );
+    setPatientBusy(false);
+    if (res.ok) {
+      setPatient(next);
+      setEditingPatient(false);
+    } else {
+      setPatientError(res.error);
+    }
+  }
+
+  // Dictations can be (re)linked to a patient; encounter transcripts are fixed.
+  // Voided records are read-only.
+  const canLinkPatient = mode === "DICTATION" && !voided;
+
   return (
     <div className="flex flex-col">
       {/* Sticky chrome — keep the lifecycle controls (Stop/Pause/Resume/Delete),
@@ -1276,6 +1317,81 @@ export function DictationEditor({
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {startedAtLabel}
           </p>
+
+          {/* Linked patient — a chip when one is linked (with Change/Remove for
+              editable dictations), or a "Link patient" affordance when none. */}
+          {patient || canLinkPatient ? (
+            <div className="mt-2">
+              {editingPatient ? (
+                <div className="flex max-w-sm items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <PatientPicker
+                      value={null}
+                      onChange={(p) => void handleSetPatient(p)}
+                      busy={patientBusy}
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPatient(false);
+                      setPatientError(null);
+                    }}
+                    className="shrink-0 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : patient ? (
+                <div className="inline-flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300">
+                  <UserIcon
+                    aria-hidden="true"
+                    className="size-3.5 text-zinc-400 dark:text-zinc-500"
+                  />
+                  <span className="font-medium">{patient.preferredName}</span>
+                  {patientMeta(patient) ? (
+                    <span className="font-mono text-[10px] tracking-wide text-zinc-400 dark:text-zinc-500">
+                      {patientMeta(patient)}
+                    </span>
+                  ) : null}
+                  {canLinkPatient ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPatient(true)}
+                        className="ml-1 font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                      >
+                        Change
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSetPatient(null)}
+                        disabled={patientBusy}
+                        className="font-medium text-zinc-400 hover:text-zinc-700 disabled:opacity-40 dark:text-zinc-500 dark:hover:text-zinc-300"
+                      >
+                        Remove
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : canLinkPatient ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingPatient(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"
+                >
+                  <UserPlusIcon aria-hidden="true" className="size-3.5" />
+                  Link patient
+                </button>
+              ) : null}
+              {patientError ? (
+                <span className="ml-2 text-xs text-red-600 dark:text-red-400">
+                  {patientError}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </header>
 
         {/* Divider between the header and the note surface */}

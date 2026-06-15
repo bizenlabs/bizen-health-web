@@ -27,6 +27,7 @@ export function DictationSession({
     const res = await startTranscriptionAction({
       mode: "DICTATION",
       templateId: choice.templateId,
+      patientId: choice.patientId,
     });
     if (!res.ok) {
       setError(res.error);

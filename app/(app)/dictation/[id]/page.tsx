@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
+import { getPatient, type PatientSummary } from "@/lib/patients";
+import { detailToPatientSummary } from "@/lib/patient-display";
 import { getTemplate } from "@/lib/templates";
 import { getTranscription } from "@/lib/transcriptions";
 import { DictationEditor } from "../_components/dictation-editor";
@@ -58,6 +60,18 @@ export default async function DictationDetailPage({
     }
   }
 
+  // Resolve the linked patient (if any) so the editor can show + edit the link.
+  let initialPatient: PatientSummary | null = null;
+  if (dictation.patientId) {
+    try {
+      initialPatient = detailToPatientSummary(
+        await getPatient(dictation.patientId, { includeVoided: true }),
+      );
+    } catch {
+      /* patient unavailable — the editor still lets the clinician relink */
+    }
+  }
+
   return (
     <div className="flex w-full flex-1 flex-col">
       {/* The editor owns its own header (name, controls, timestamp) so the
@@ -73,6 +87,8 @@ export default async function DictationDetailPage({
           templateId={dictation.templateId}
           templateName={templateName}
           templateContent={templateContent}
+          mode={dictation.mode}
+          initialPatient={initialPatient}
           initialNote={dictation.noteContent}
           transcriptText={transcriptText}
           initialSegments={initialSegments}

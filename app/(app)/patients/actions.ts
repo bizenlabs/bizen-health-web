@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import {
   addPatientIdentifier,
+  listPatients,
+  type PatientSummary,
   recordPatientDeath,
   registerPatient,
   restorePatient,
@@ -19,6 +21,21 @@ import {
   type UpdatePatientInput,
 } from "@/lib/patients";
 import { ApiError } from "@/lib/api";
+
+// Typeahead search backing the patient picker (dictation linking, etc.). Returns
+// a small page of active-patient summaries; an empty/blank query lists recent
+// patients so the picker is useful before the clinician types.
+export async function searchPatientsAction(
+  q: string,
+): Promise<PatientSummary[]> {
+  await requireSession();
+  try {
+    const page = await listPatients({ q: q.trim() || undefined, size: 8 });
+    return page.content;
+  } catch {
+    return [];
+  }
+}
 
 const VALID_GENDERS: ReadonlySet<Gender> = new Set([
   "MALE",

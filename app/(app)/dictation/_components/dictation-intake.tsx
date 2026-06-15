@@ -11,6 +11,8 @@ import {
   PencilSquareIcon,
 } from "@heroicons/react/20/solid";
 import clsx from "clsx";
+import { PatientPicker } from "@/components/patient-picker";
+import type { PatientSummary } from "@/lib/patients";
 import { CATEGORY_LABEL } from "@/lib/template-categories";
 import type { TemplateSummary } from "@/lib/templates";
 import { useAudioDevices } from "@/lib/transcription/use-audio-devices";
@@ -25,6 +27,8 @@ export interface DictationChoice {
   templateId: string | null;
   templateName: string | null;
   deviceId: string | null;
+  /** Optionally link this dictation to a patient. Null = unlinked. */
+  patientId: string | null;
 }
 
 const PAGE_SIZE = 8;
@@ -64,6 +68,7 @@ export function DictationIntake({
     useAudioDevices();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [patient, setPatient] = useState<PatientSummary | null>(null);
 
   // Retired templates stay referenceable by history but are hidden from pickers.
   const pickable = useMemo(
@@ -91,8 +96,13 @@ export function DictationIntake({
 
   const choose = useCallback(
     (templateId: string | null, templateName: string | null) =>
-      onReady({ templateId, templateName, deviceId: selectedDeviceId }),
-    [onReady, selectedDeviceId],
+      onReady({
+        templateId,
+        templateName,
+        deviceId: selectedDeviceId,
+        patientId: patient?.id ?? null,
+      }),
+    [onReady, selectedDeviceId, patient],
   );
 
   const canPickDevice = hasLabels && devices.length > 1;
@@ -141,6 +151,20 @@ export function DictationIntake({
             </span>
           )}
           <MicLevelMeter deviceId={selectedDeviceId} onActive={refresh} />
+        </div>
+      </motion.div>
+
+      {/* Patient — optional link so the dictation files under a patient record
+          and is findable from it later. */}
+      <motion.div variants={itemVariants} className="mt-5 px-6 sm:mt-6 sm:px-8">
+        <span className="flex items-baseline gap-2">
+          <Eyebrow>Patient</Eyebrow>
+          <span className="font-mono text-[10px] tracking-wider text-zinc-300 lowercase dark:text-zinc-600">
+            optional
+          </span>
+        </span>
+        <div className="mt-2">
+          <PatientPicker value={patient} onChange={setPatient} />
         </div>
       </motion.div>
 
