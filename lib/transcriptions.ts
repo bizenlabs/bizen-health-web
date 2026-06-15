@@ -174,6 +174,11 @@ export const getTranscription = (
 export const listTranscriptionsForEncounter = (encounterId: string) =>
   api<TranscriptionSummary[]>(`/v1/transcriptions?encounterId=${encounterId}`);
 
+// A patient's dictations across the clinic, newest first — backs the
+// "Dictations" section on the patient detail page.
+export const listTranscriptionsForPatient = (patientId: string) =>
+  api<TranscriptionSummary[]>(`/v1/transcriptions?patientId=${patientId}`);
+
 export const listMyDictations = (p: { page?: number; size?: number } = {}) =>
   api<PageResponse<TranscriptionSummary>>(
     `/v1/transcriptions?mine=true&page=${p.page ?? 0}&size=${p.size ?? 50}`,

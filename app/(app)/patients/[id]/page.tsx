@@ -10,9 +10,11 @@ import {
   type AppointmentRecurrence,
 } from "@/lib/appointments";
 import { listObservationsForPatient } from "@/lib/observations";
+import { listTranscriptionsForPatient } from "@/lib/transcriptions";
 import { ApiError } from "@/lib/api";
 import { PatientAvatar } from "@/components/patient-avatar";
 import { AppointmentsSection } from "../_components/appointments-section";
+import { DictationsSection } from "../_components/dictations-section";
 import { EncountersSection } from "../_components/encounters-section";
 import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
@@ -62,6 +64,9 @@ export default async function PatientDetailPage({
         listAppointmentsForPatient(patient.id, { size: 20 }),
         listRecurrencesForPatient(patient.id),
       ]);
+  const dictations = patient.voided
+    ? []
+    : await listTranscriptionsForPatient(patient.id);
   const encountersById = Object.fromEntries(
     encounters.content.map((e) => [e.id, e]),
   );
@@ -178,6 +183,8 @@ export default async function PatientDetailPage({
           encounters={encounters.content}
           canRecord={!patient.voided}
         />
+
+        {patient.voided ? null : <DictationsSection dictations={dictations} />}
 
         <AppointmentsSection
           patientId={patient.id}
