@@ -26,7 +26,6 @@ import { DictationRowDelete } from "./dictation-row-delete";
 // live/notable signal colour.
 
 const FREE_FORM = "__free-form__";
-const NO_PATIENT = "__no-patient__";
 
 const listVariants = {
   hidden: {},
@@ -94,7 +93,6 @@ export function DictationLibrary({
 }) {
   const [search, setSearch] = useState("");
   const [templateFilter, setTemplateFilter] = useState("");
-  const [patientFilter, setPatientFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | TranscriptionStatus>(
     "",
   );
@@ -115,22 +113,6 @@ export function DictationLibrary({
     };
   }, [dictations, templateNames]);
 
-  // Patient filter options — only patients that actually appear in the list.
-  const patientOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    let hasUnlinked = false;
-    for (const d of dictations) {
-      if (!d.patientId) hasUnlinked = true;
-      else if (!seen.has(d.patientId)) {
-        seen.set(d.patientId, patientNames[d.patientId] ?? "Linked patient");
-      }
-    }
-    return {
-      hasUnlinked,
-      patients: [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1])),
-    };
-  }, [dictations, patientNames]);
-
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return dictations.filter((d) => {
@@ -140,14 +122,6 @@ export function DictationLibrary({
         templateFilter &&
         templateFilter !== FREE_FORM &&
         d.templateId !== templateFilter
-      ) {
-        return false;
-      }
-      if (patientFilter === NO_PATIENT && d.patientId) return false;
-      if (
-        patientFilter &&
-        patientFilter !== NO_PATIENT &&
-        d.patientId !== patientFilter
       ) {
         return false;
       }
@@ -165,7 +139,6 @@ export function DictationLibrary({
     dictations,
     search,
     templateFilter,
-    patientFilter,
     statusFilter,
     templateNames,
     patientNames,
@@ -264,7 +237,7 @@ export function DictationLibrary({
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search dictations…"
+                placeholder="Search by title or patient…"
                 className="w-full rounded-lg border border-zinc-200 py-1.5 pr-3 pl-8 text-sm placeholder:text-zinc-400 focus:border-zinc-300 focus:ring-2 focus:ring-zinc-900/5 focus:outline-none dark:border-zinc-800 dark:bg-transparent dark:focus:border-zinc-700"
               />
             </div>
@@ -284,25 +257,6 @@ export function DictationLibrary({
                 </option>
               ))}
             </select>
-            {patientOptions.patients.length > 0 ||
-            patientOptions.hasUnlinked ? (
-              <select
-                aria-label="Filter by patient"
-                value={patientFilter}
-                onChange={(e) => setPatientFilter(e.target.value)}
-                className="max-w-[12rem] rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-transparent dark:text-zinc-300"
-              >
-                <option value="">All patients</option>
-                {patientOptions.hasUnlinked ? (
-                  <option value={NO_PATIENT}>No patient</option>
-                ) : null}
-                {patientOptions.patients.map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            ) : null}
             <select
               aria-label="Filter by status"
               value={statusFilter}
