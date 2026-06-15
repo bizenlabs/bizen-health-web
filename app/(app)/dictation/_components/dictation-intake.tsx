@@ -299,7 +299,7 @@ function PagerButton({
   );
 }
 
-type MeterStatus = "pending" | "live" | "denied";
+type MeterStatus = "pending" | "live" | "muted" | "denied";
 
 /**
  * A live microphone level meter. Acquires the mic as soon as it mounts (no
@@ -322,6 +322,15 @@ function MicLevelMeter({
     let stream: MediaStream | null = null;
     let ctx: AudioContext | null = null;
     let raf = 0;
+    let track: MediaStreamTrack | null = null;
+
+    // A resolved stream isn't necessarily producing audio: macOS keeps the
+    // internal-mic track but marks it muted at the source when the lid is
+    // closed (the OS or another app can mute it too). Reflect that as
+    // "no signal" instead of a misleading "Live".
+    const syncMuted = () => {
+      if (!cancelled) setStatus(track?.muted ? "muted" : "live");
+    };
 
     async function run() {
       try {
@@ -332,7 +341,10 @@ function MicLevelMeter({
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
-        setStatus("live");
+        track = stream.getAudioTracks()[0] ?? null;
+        track?.addEventListener("mute", syncMuted);
+        track?.addEventListener("unmute", syncMuted);
+        syncMuted();
         onActive();
 
         ctx = new AudioContext();
@@ -373,6 +385,8 @@ function MicLevelMeter({
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
+      track?.removeEventListener("mute", syncMuted);
+      track?.removeEventListener("unmute", syncMuted);
       stream?.getTracks().forEach((t) => t.stop());
       void ctx?.close();
     };
@@ -380,7 +394,13 @@ function MicLevelMeter({
 
   const activeBars = status === "live" ? Math.round(level * METER_BARS) : 0;
   const statusLabel =
-    status === "live" ? "Live" : status === "denied" ? "Blocked" : "Waiting";
+    status === "live"
+      ? "Live"
+      : status === "muted"
+        ? "No signal"
+        : status === "denied"
+          ? "Blocked"
+          : "Waiting";
 
   return (
     <span className="flex shrink-0 items-center gap-2.5">
@@ -391,7 +411,9 @@ function MicLevelMeter({
             ? "Microphone access blocked"
             : status === "pending"
               ? "Waiting for microphone…"
-              : "Microphone input level"
+              : status === "muted"
+                ? "No microphone signal — the source is muted (e.g. the laptop lid is closed)"
+                : "Microphone input level"
         }
       >
         {Array.from({ length: METER_BARS }, (_, i) => (
@@ -414,6 +436,7 @@ function MicLevelMeter({
           className={clsx(
             "size-1.5 rounded-full",
             status === "live" && "bg-emerald-500",
+            status === "muted" && "bg-amber-500",
             status === "pending" &&
               "animate-pulse bg-zinc-300 dark:bg-zinc-600",
             status === "denied" && "bg-red-500",
@@ -424,9 +447,11 @@ function MicLevelMeter({
             "font-mono text-[9px] font-medium tracking-[0.12em] uppercase",
             status === "live"
               ? "text-emerald-600 dark:text-emerald-400"
-              : status === "denied"
-                ? "text-red-500 dark:text-red-400"
-                : "text-zinc-400 dark:text-zinc-500",
+              : status === "muted"
+                ? "text-amber-600 dark:text-amber-400"
+                : status === "denied"
+                  ? "text-red-500 dark:text-red-400"
+                  : "text-zinc-400 dark:text-zinc-500",
           )}
         >
           {statusLabel}
