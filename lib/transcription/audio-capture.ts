@@ -19,6 +19,12 @@ export interface AudioCapture {
   // actually picking up audio. Returns 0 before capture starts and decays to 0
   // while paused (the worklet keeps emitting silent frames).
   getLevel(): number;
+  // Whether the mic track is muted *at the source* — the OS or hardware is
+  // withholding audio (e.g. a closed laptop lid mutes the internal mic). This
+  // is distinct from pause(), which disables the track at the app level; a
+  // source-muted track yields silence while still "live", so the meter reads 0
+  // with no obvious cause. Returns false before capture starts.
+  isMuted(): boolean;
 }
 
 // Acquire the mic stream, pinning the requested device when one is given. The
@@ -140,6 +146,12 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
 
     getLevel() {
       return level;
+    },
+
+    isMuted() {
+      // `muted` is the source-level flag (OS/hardware), not the app-level
+      // `enabled` that pause() toggles — so this stays false across a pause.
+      return stream?.getAudioTracks()[0]?.muted ?? false;
     },
 
     async listDevices() {

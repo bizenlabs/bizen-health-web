@@ -367,6 +367,7 @@ export function DictationEditor({
     switchDevice,
     stop,
     getLevel,
+    isMuted,
   } = useTranscription();
   const { devices, selectedDeviceId, setSelectedDeviceId, hasLabels } =
     useAudioDevices();
@@ -377,6 +378,8 @@ export function DictationEditor({
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  // Whether the mic is muted at the source mid-recording (e.g. lid closed).
+  const [micMuted, setMicMuted] = useState(false);
   // Which pane the review view shows once recording has stopped: the editable
   // note, or the read-only raw transcript.
   const [activeTab, setActiveTab] = useState<"note" | "transcript">("note");
@@ -1060,6 +1063,20 @@ export function DictationEditor({
   const recording =
     state === "starting" || state === "recording" || state === "paused";
 
+  // Poll the source-mute flag so a mic that goes silent while recording (lid
+  // closed, OS-muted) surfaces in the HUD instead of a flat meter with no
+  // explanation. Source-mute fires no useful events through the worklet path; a
+  // 500 ms poll is plenty for a rare lid open/close, and setState only on
+  // change keeps it from re-rendering every tick. Muted is meaningful only
+  // while actively recording, so it reads false otherwise.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const muted = state === "recording" && isMuted();
+      setMicMuted((prev) => (prev === muted ? prev : muted));
+    }, 500);
+    return () => clearInterval(id);
+  }, [state, isMuted]);
+
   // The Note/Transcript tabs surface only once recording has stopped and there
   // is a raw transcript worth showing.
   const showTabs = !recording && transcriptText.trim().length > 0;
@@ -1277,11 +1294,22 @@ export function DictationEditor({
               aria-hidden="true"
               className={clsx(
                 "size-1.5 rounded-full",
-                paused ? "bg-amber-500" : "animate-pulse bg-red-500",
+                paused
+                  ? "bg-amber-500"
+                  : micMuted
+                    ? "bg-amber-500"
+                    : "animate-pulse bg-red-500",
               )}
             />
-            <span className="font-mono text-[10px] font-medium tracking-[0.2em] text-zinc-400 uppercase dark:text-zinc-500">
-              {paused ? "Paused" : "Recording"}
+            <span
+              className={clsx(
+                "font-mono text-[10px] font-medium tracking-[0.2em] uppercase",
+                !paused && micMuted
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-zinc-400 dark:text-zinc-500",
+              )}
+            >
+              {paused ? "Paused" : micMuted ? "No signal" : "Recording"}
             </span>
             <span
               aria-hidden="true"

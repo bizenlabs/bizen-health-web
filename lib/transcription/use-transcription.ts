@@ -65,6 +65,9 @@ export interface UseTranscriptionResult {
   // Current input loudness in [0, 1] — read on an animation frame to drive the
   // live level meter. Stable identity; safe to depend on.
   getLevel: () => number;
+  // Whether the mic is muted at the source (e.g. closed laptop lid). Polled to
+  // surface a silent-but-live mic. Stable identity; safe to depend on.
+  isMuted: () => boolean;
 }
 
 const FLUSH_BATCH = 5;
@@ -337,6 +340,11 @@ export function useTranscription(): UseTranscriptionResult {
   // 0 whenever nothing is capturing.
   const getLevel = useCallback(() => captureRef.current?.getLevel() ?? 0, []);
 
+  // Whether the mic is muted at the source (e.g. a closed laptop lid). Polled
+  // by the meter so a silent-but-live mic surfaces as "no signal" rather than
+  // an unexplained flat meter.
+  const isMuted = useCallback(() => captureRef.current?.isMuted() ?? false, []);
+
   // Tear down capture + socket if the component unmounts mid-recording.
   // A client-side navigation away never calls stop(), so without this the
   // backend session would be stranded IN_PROGRESS forever. Implicitly finalise
@@ -376,5 +384,6 @@ export function useTranscription(): UseTranscriptionResult {
     switchDevice,
     stop,
     getLevel,
+    isMuted,
   };
 }
