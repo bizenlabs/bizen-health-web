@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth";
 import {
   cloneTemplate,
   createTemplate,
+  deleteTemplate,
   restoreTemplate,
   restoreTemplateVersion,
   retireTemplate,
@@ -149,6 +150,18 @@ export async function retireTemplateAction(id: string): Promise<void> {
   } catch (err) {
     if (err instanceof ApiError) throw err;
     throw new Error("Could not retire the template.");
+  }
+  revalidatePath(LIST_PATH);
+}
+
+/** Permanently delete a tenant-owned template. System templates are rejected by the API. */
+export async function deleteTemplateAction(id: string): Promise<void> {
+  await requireRole("tenant_admin", "super_admin");
+  try {
+    await deleteTemplate(id);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not delete the template.");
   }
   revalidatePath(LIST_PATH);
 }
