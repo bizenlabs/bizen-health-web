@@ -8,6 +8,7 @@ import {
   type TemplateDetail,
   type TemplateVersion,
 } from "@/lib/templates";
+import { SystemTemplateView } from "../_components/system-template-view";
 import { TemplateEditor } from "../_components/template-editor";
 
 export default async function EditTemplatePage({
@@ -18,21 +19,29 @@ export default async function EditTemplatePage({
   const { id } = await params;
 
   let template: TemplateDetail;
-  let versions: TemplateVersion[];
   try {
-    [template, versions] = await Promise.all([
-      getTemplate(id),
-      listTemplateVersions(id),
-    ]);
+    template = await getTemplate(id);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
+  }
+
+  // System templates are read-only and carry no per-row version history;
+  // only fetch versions for the editable tenant case.
+  let versions: TemplateVersion[] = [];
+  if (template.editable) {
+    versions = await listTemplateVersions(id);
   }
 
   return (
     <div className="px-6 py-10">
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-semibold">{template.name}</h1>
+        {template.source === "SYSTEM" ? (
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            system
+          </span>
+        ) : null}
         {template.retired ? (
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
             retired
@@ -41,11 +50,15 @@ export default async function EditTemplatePage({
       </div>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         {CATEGORY_LABEL[template.category]} · version {template.version}
-        {template.isDefault ? " · default for its category" : ""}
+        {template.effectiveDefault ? " · default for its category" : ""}
       </p>
 
       <div className="mt-8">
-        <TemplateEditor template={template} versions={versions} />
+        {template.editable ? (
+          <TemplateEditor template={template} versions={versions} />
+        ) : (
+          <SystemTemplateView template={template} />
+        )}
       </div>
     </div>
   );

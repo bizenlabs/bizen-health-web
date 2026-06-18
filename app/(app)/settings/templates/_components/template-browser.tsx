@@ -12,7 +12,7 @@ import {
   TEMPLATE_CATEGORIES,
   type TemplateCategory,
 } from "@/lib/template-categories";
-import type { TemplateSummary } from "@/lib/templates";
+import type { TemplateSource, TemplateSummary } from "@/lib/templates";
 import { TemplateCard } from "./template-card";
 
 const PAGE_SIZE = 12;
@@ -46,6 +46,7 @@ export function TemplateBrowser({
 }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<TemplateCategory | "">("");
+  const [source, setSource] = useState<TemplateSource | "">("");
   const [showRetired, setShowRetired] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -53,6 +54,7 @@ export function TemplateBrowser({
     const needle = search.trim().toLowerCase();
     return templates.filter((t) => {
       if (!showRetired && t.retired) return false;
+      if (source && t.source !== source) return false;
       if (category && t.category !== category) return false;
       if (
         needle &&
@@ -63,7 +65,7 @@ export function TemplateBrowser({
       }
       return true;
     });
-  }, [templates, search, category, showRetired]);
+  }, [templates, search, category, source, showRetired]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -87,8 +89,10 @@ export function TemplateBrowser({
         <div>
           <h1 className="text-2xl font-semibold">Note templates</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Reusable Markdown scaffolds for clinical notes. Each tenant starts
-            with editable defaults; one template per category is the default.
+            Reusable Markdown scaffolds for clinical notes. System templates are
+            published by the platform and read-only — clone one to customize it.
+            Your own templates are fully editable; one template per category is
+            the default.
           </p>
         </div>
         <Link
@@ -117,6 +121,18 @@ export function TemplateBrowser({
               {CATEGORY_LABEL[c]}
             </option>
           ))}
+        </select>
+
+        <select
+          value={source}
+          onChange={(e) =>
+            onFilterChange(setSource)(e.target.value as TemplateSource | "")
+          }
+          className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm dark:border-zinc-800 dark:bg-transparent"
+        >
+          <option value="">All sources</option>
+          <option value="SYSTEM">System</option>
+          <option value="TENANT">My templates</option>
         </select>
 
         <label className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
