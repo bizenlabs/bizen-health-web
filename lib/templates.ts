@@ -89,6 +89,13 @@ export const updateTemplate = (id: string, body: TemplateInput) =>
 export const retireTemplate = (id: string) =>
   api<TemplateDetail>(`/v1/templates/${id}`, { method: "DELETE" });
 
+/**
+ * Permanently delete a tenant-owned template and its version history. System
+ * templates are read-only and cannot be deleted (the API rejects with 403).
+ */
+export const deleteTemplate = (id: string) =>
+  api<void>(`/v1/templates/${id}?purge=true`, { method: "DELETE" });
+
 export const restoreTemplate = (id: string) =>
   api<TemplateDetail>(`/v1/templates/${id}/restore`, { method: "POST" });
 

@@ -7,6 +7,7 @@ import { CATEGORY_LABEL } from "@/lib/template-categories";
 import type { TemplateSummary } from "@/lib/templates";
 import {
   cloneTemplateAction,
+  deleteTemplateAction,
   restoreTemplateAction,
   retireTemplateAction,
   setDefaultTemplateAction,
@@ -82,9 +83,17 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
             </ActionButton>
           </ActionForm>
         ) : retired ? (
-          <ActionForm action={restoreTemplateAction.bind(null, template.id)}>
-            <ActionButton>Restore</ActionButton>
-          </ActionForm>
+          <>
+            <ActionForm action={restoreTemplateAction.bind(null, template.id)}>
+              <ActionButton>Restore</ActionButton>
+            </ActionForm>
+            <ActionForm
+              action={deleteTemplateAction.bind(null, template.id)}
+              confirm={`Permanently delete "${template.name}"? This removes it and its version history for good and cannot be undone.`}
+            >
+              <ActionButton danger>Delete</ActionButton>
+            </ActionForm>
+          </>
         ) : (
           <>
             {!template.effectiveDefault ? (
@@ -105,6 +114,12 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
               confirm={`Retire "${template.name}"? It stays referenceable by history but is hidden from pickers.`}
             >
               <ActionButton danger>Retire</ActionButton>
+            </ActionForm>
+            <ActionForm
+              action={deleteTemplateAction.bind(null, template.id)}
+              confirm={`Permanently delete "${template.name}"? This removes it and its version history for good and cannot be undone.`}
+            >
+              <ActionButton danger>Delete</ActionButton>
             </ActionForm>
           </>
         )}
