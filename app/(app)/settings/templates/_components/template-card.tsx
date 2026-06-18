@@ -59,8 +59,12 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
 
       {/* Footer — status badges + relative updated date */}
       <div className="mt-auto flex items-center gap-2 pt-1">
-        {template.isDefault ? <Badge tone="emerald">Default</Badge> : null}
-        {template.system ? <Badge tone="zinc">Starter</Badge> : null}
+        {template.effectiveDefault ? (
+          <Badge tone="emerald">Default</Badge>
+        ) : null}
+        {template.source === "SYSTEM" ? (
+          <Badge tone="zinc">System</Badge>
+        ) : null}
         {retired ? <Badge tone="zinc">Retired</Badge> : null}
         <span className="ml-auto text-[10px] text-zinc-400 dark:text-zinc-500">
           v{template.version} · {formatRelativeDate(template.updatedAt)}
@@ -69,13 +73,21 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
 
       {/* Action bar — revealed on hover / focus */}
       <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 dark:border-zinc-700/60">
-        {retired ? (
+        {!template.editable ? (
+          // System templates are read-only — clone to make an editable copy.
+          <ActionForm action={cloneTemplateAction.bind(null, template.id)}>
+            <ActionButton>
+              <DocumentDuplicateIcon className="size-3.5" />
+              Clone to customize
+            </ActionButton>
+          </ActionForm>
+        ) : retired ? (
           <ActionForm action={restoreTemplateAction.bind(null, template.id)}>
             <ActionButton>Restore</ActionButton>
           </ActionForm>
         ) : (
           <>
-            {!template.isDefault ? (
+            {!template.effectiveDefault ? (
               <ActionForm
                 action={setDefaultTemplateAction.bind(null, template.id)}
               >

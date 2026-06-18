@@ -258,7 +258,7 @@ export function DictationIntake({
                       <span className="font-mono text-[10px] tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
                         {CATEGORY_LABEL[t.category]}
                       </span>
-                      {t.isDefault ? (
+                      {t.effectiveDefault ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
                           <span className="size-1 rounded-full bg-emerald-500" />
                           Default

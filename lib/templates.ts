@@ -3,11 +3,14 @@ import { api } from "@/lib/api";
 import type { TemplateCategory } from "@/lib/template-categories";
 
 /**
- * Clinical note templates — tenant-scoped, versioned Markdown scaffolds a
- * clinic admin curates. Each tenant is seeded with editable starters on
- * onboarding; the `system` flag records that provenance but does not lock the
- * row. Templates are retired, never deleted, so anything already referencing
- * one keeps resolving.
+ * Clinical note templates. The catalogue merges two stores:
+ *  - `SYSTEM` templates — global, platform-published, read-only (`editable:
+ *    false`). A clinic clones one to customise it; it never edits one in place.
+ *  - `TENANT` templates — the clinic's own rows (authored or cloned), editable
+ *    and versioned. Retired, never deleted, so anything referencing one resolves.
+ *
+ * `effectiveDefault` is the resolved default for the category: a tenant default
+ * overrides the platform (system) default.
  *
  * Server-only BFF wrappers over the Spring `/v1/templates` surface. The
  * category constants live in `lib/template-categories.ts` (no `server-only`)
@@ -18,14 +21,19 @@ import type { TemplateCategory } from "@/lib/template-categories";
 export { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
 export type { TemplateCategory } from "@/lib/template-categories";
 
+/** Which store a row comes from. */
+export type TemplateSource = "SYSTEM" | "TENANT";
+
 /** List-row shape — no `content`, to keep the list payload small. */
 export type TemplateSummary = {
   id: string;
+  source: TemplateSource;
   name: string;
   description: string | null;
   category: TemplateCategory;
-  system: boolean;
+  editable: boolean;
   isDefault: boolean;
+  effectiveDefault: boolean;
   version: number;
   retired: boolean;
   updatedAt: string;
