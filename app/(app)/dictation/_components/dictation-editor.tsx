@@ -756,8 +756,14 @@ export function DictationEditor({
       if (!editor || insertPosRef.current === null || !text) return;
       const from = insertPosRef.current;
       const insert = (blockHasContent(editor, from) ? " " : "") + text;
-      editor.commands.insertContentAt(from, insert);
-      const to = from + insert.length;
+      // Insert as a literal text node, never a raw string: a raw string can be
+      // parsed as Markdown/HTML, so dictated speech like "1." or "- " would
+      // restructure the doc. Then read the true post-insert position back from
+      // the selection — ProseMirror positions are not string offsets, so
+      // advancing by insert.length drifts (and compounds) whenever the doc
+      // grows by a different amount than the characters inserted.
+      editor.commands.insertContentAt(from, { type: "text", text: insert });
+      const to = editor.state.selection.from;
       insertPosRef.current = to;
       lastInsertRangeRef.current = { from, to };
     },
@@ -1003,7 +1009,12 @@ export function DictationEditor({
         text: insert,
         marks: [{ type: "italic" }],
       });
-      partialRangeRef.current = { from, length: insert.length };
+      // Record the real inserted span (doc-position delta), not the string
+      // length, so the next tick deletes exactly this partial.
+      partialRangeRef.current = {
+        from,
+        length: editor.state.selection.from - from,
+      };
     }
 
     // Keep the insertion point visible — only nudge if it has drifted off.
