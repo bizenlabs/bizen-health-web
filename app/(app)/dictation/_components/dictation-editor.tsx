@@ -48,7 +48,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import { Markdown } from "@tiptap/markdown";
-import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { cellAround, goToNextCell, TableMap } from "@tiptap/pm/tables";
 import { TableExtensions } from "@/lib/editor/table";
 import {
@@ -560,6 +560,46 @@ export function DictationEditor({
     editor.on("transaction", forceUpdate);
     return () => {
       editor.off("transaction", forceUpdate);
+    };
+  }, [editor]);
+
+  // Keep the dictation position refs glued to the document the same way the
+  // caret decoration is (dictation-caret.ts maps its position through every
+  // change). insertPos and the partial / last-insert ranges are plain refs, so
+  // without this an out-of-band edit between ticks — e.g. an autosave-driven
+  // setContent — would leave them pointing at moved content while the caret
+  // moved correctly, the one way the tracked offset and the visible caret can
+  // disagree. Mapping with the same -1 bias as the caret plugin makes them move
+  // identically. Our own insert/delete transactions are mapped here too, but
+  // the explicit selection.from resync after each insert is the final word, so
+  // this only ever corrects positions we didn't author.
+  useEffect(() => {
+    if (!editor) return;
+    const onTx = ({ transaction: tr }: { transaction: Transaction }) => {
+      if (!tr.docChanged) return;
+      const map = tr.mapping;
+      if (insertPosRef.current !== null) {
+        insertPosRef.current = map.map(insertPosRef.current, -1);
+      }
+      if (partialRangeRef.current) {
+        const { from, length } = partialRangeRef.current;
+        const mappedFrom = map.map(from, -1);
+        partialRangeRef.current = {
+          from: mappedFrom,
+          length: map.map(from + length, 1) - mappedFrom,
+        };
+      }
+      if (lastInsertRangeRef.current) {
+        const { from, to } = lastInsertRangeRef.current;
+        lastInsertRangeRef.current = {
+          from: map.map(from, -1),
+          to: map.map(to, 1),
+        };
+      }
+    };
+    editor.on("transaction", onTx);
+    return () => {
+      editor.off("transaction", onTx);
     };
   }, [editor]);
 
