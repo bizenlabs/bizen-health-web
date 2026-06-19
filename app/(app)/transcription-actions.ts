@@ -92,7 +92,11 @@ export async function appendSegmentsAction(
 
 export async function completeTranscriptionAction(
   transcriptionId: string,
-  opts: { endedAt?: string | null; deepgramRequestId?: string | null } = {},
+  opts: {
+    endedAt?: string | null;
+    deepgramRequestId?: string | null;
+    audioSeconds?: number | null;
+  } = {},
 ): Promise<ActionResult<TranscriptionDetail>> {
   await requireSession();
   const result = await run(

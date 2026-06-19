@@ -34,6 +34,8 @@ export type TranscriptionDetail = {
   status: TranscriptionStatus;
   language: string;
   deepgramRequestId: string | null;
+  // Billable audio seconds reported at completion (feeds the usage ledger).
+  audioSeconds: number | null;
   startedAt: string;
   endedAt: string | null;
   recordedBy: string | null;
@@ -114,7 +116,12 @@ export const appendSegments = (id: string, segments: SegmentInput[]) =>
 
 export const completeTranscription = (
   id: string,
-  body: { endedAt?: string | null; deepgramRequestId?: string | null } = {},
+  body: {
+    endedAt?: string | null;
+    deepgramRequestId?: string | null;
+    // Billable audio seconds streamed to Deepgram for this sitting.
+    audioSeconds?: number | null;
+  } = {},
 ) =>
   api<TranscriptionDetail>(`/v1/transcriptions/${id}/complete`, {
     method: "POST",

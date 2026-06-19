@@ -30,7 +30,14 @@ type DeepgramResults = {
   is_final: boolean;
   channel: { alternatives: DeepgramAlternative[] };
 };
-type DeepgramMessage = DeepgramResults | { type: string };
+// Deepgram emits a final Metadata message at end-of-stream carrying the audio
+// duration it processed (billable seconds) and the request id.
+type DeepgramMetadata = {
+  type: "Metadata";
+  duration?: number;
+  request_id?: string;
+};
+type DeepgramMessage = DeepgramResults | DeepgramMetadata | { type: string };
 
 export interface DeepgramStreamOptions {
   // Encounter transcriptions diarize (speaker 0/1/…); dictation does not.
@@ -153,8 +160,20 @@ export function createDeepgramStream(
     } catch {
       return;
     }
-    if (msg.type === "Results") handleResults(msg as DeepgramResults);
-    // Metadata / SpeechStarted / UtteranceEnd are ignored for now.
+    if (msg.type === "Results") {
+      handleResults(msg as DeepgramResults);
+      return;
+    }
+    if (msg.type === "Metadata") {
+      const meta = msg as DeepgramMetadata;
+      emit({
+        kind: "metadata",
+        durationSeconds: meta.duration ?? 0,
+        requestId: meta.request_id,
+      });
+      return;
+    }
+    // SpeechStarted / UtteranceEnd are ignored for now.
   }
 
   return {

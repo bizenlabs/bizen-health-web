@@ -72,6 +72,9 @@ export interface UseTranscriptionResult {
 
 const FLUSH_BATCH = 5;
 const FLUSH_IDLE_MS = 4000;
+// Matches the Deepgram stream + capture sample rate; used to convert streamed
+// PCM sample counts into billable audio seconds.
+const SAMPLE_RATE = 16000;
 
 export function useTranscription(): UseTranscriptionResult {
   const [state, setState] = useState<RecorderState>("idle");
@@ -92,6 +95,13 @@ export function useTranscription(): UseTranscriptionResult {
   const liveRef = useRef<boolean>(false);
   const startedAtRef = useRef<number>(0);
   const seqRef = useRef<number>(0);
+  // Usage metering for this sitting. streamedSamples is the audio we actually
+  // sent to Deepgram (accumulates across mic switches / reconnects, gated by
+  // pause); metaDuration/requestId come from Deepgram's end-of-stream Metadata
+  // when it arrives before close. recordedSeconds() reconciles the two.
+  const streamedSamplesRef = useRef<number>(0);
+  const metaDurationRef = useRef<number>(0);
+  const requestIdRef = useRef<string | null>(null);
   const pendingRef = useRef<LiveSegment[]>([]);
   const flushingRef = useRef<boolean>(false);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,6 +136,15 @@ export function useTranscription(): UseTranscriptionResult {
     }
   }, [clearFlushTimer]);
 
+  // Billable audio seconds for this sitting: the larger of Deepgram's reported
+  // duration and what we streamed, rounded to milliseconds.
+  const recordedSeconds = useCallback((): number => {
+    const streamed = streamedSamplesRef.current / SAMPLE_RATE;
+    return (
+      Math.round(Math.max(streamed, metaDurationRef.current) * 1000) / 1000
+    );
+  }, []);
+
   const scheduleIdleFlush = useCallback(() => {
     clearFlushTimer();
     flushTimerRef.current = setTimeout(() => void flush(), FLUSH_IDLE_MS);
@@ -139,6 +158,17 @@ export function useTranscription(): UseTranscriptionResult {
         return;
       }
       if (e.kind === "closed") {
+        return;
+      }
+      if (e.kind === "metadata") {
+        // Deepgram's own duration is authoritative for a single stream; keep
+        // the larger of it and our streamed-sample estimate so a multi-stream
+        // (mic-switched) sitting isn't undercounted by the last stream's meta.
+        metaDurationRef.current = Math.max(
+          metaDurationRef.current,
+          e.durationSeconds,
+        );
+        if (e.requestId) requestIdRef.current = e.requestId;
         return;
       }
       if (e.kind === "partial") {
@@ -198,6 +228,9 @@ export function useTranscription(): UseTranscriptionResult {
       setSegments(seed);
       setPartial(null);
       pendingRef.current = [];
+      streamedSamplesRef.current = 0;
+      metaDurationRef.current = 0;
+      requestIdRef.current = null;
       // Continue numbering after the seeded segments so a resumed recording
       // appends to the dictation rather than colliding with existing rows.
       seqRef.current = seed.reduce(
@@ -233,7 +266,11 @@ export function useTranscription(): UseTranscriptionResult {
         // connect.
         const capture = createAudioCapture(opts?.deviceId ?? undefined);
         captureRef.current = capture;
-        await capture.start((chunk) => stream.sendPcm(chunk));
+        await capture.start((chunk) => {
+          // Count audio actually streamed to Deepgram — the billable signal.
+          streamedSamplesRef.current += chunk.length;
+          stream.sendPcm(chunk);
+        });
 
         await stream.connect({
           getToken: async () => {
@@ -293,7 +330,11 @@ export function useTranscription(): UseTranscriptionResult {
 
         const capture = createAudioCapture(deviceId ?? undefined);
         captureRef.current = capture;
-        await capture.start((chunk) => stream.sendPcm(chunk));
+        await capture.start((chunk) => {
+          // Count audio actually streamed to Deepgram — the billable signal.
+          streamedSamplesRef.current += chunk.length;
+          stream.sendPcm(chunk);
+        });
 
         await stream.connect({
           getToken: async () => {
@@ -326,6 +367,8 @@ export function useTranscription(): UseTranscriptionResult {
     }
     const res = await completeTranscriptionAction(id, {
       endedAt: new Date().toISOString(),
+      deepgramRequestId: requestIdRef.current ?? undefined,
+      audioSeconds: recordedSeconds(),
     });
     if (res.ok) {
       setState("idle");
@@ -334,7 +377,7 @@ export function useTranscription(): UseTranscriptionResult {
     setError(res.error);
     setState("error");
     return null;
-  }, [flush, teardown]);
+  }, [flush, teardown, recordedSeconds]);
 
   // Read straight off the capture each frame — no state, no re-render. Returns
   // 0 whenever nothing is capturing.
@@ -365,8 +408,13 @@ export function useTranscription(): UseTranscriptionResult {
         if (buffered.length > 0) {
           await appendSegmentsAction(id, buffered).catch(() => {});
         }
+        const streamed = streamedSamplesRef.current / SAMPLE_RATE;
+        const audioSeconds =
+          Math.round(Math.max(streamed, metaDurationRef.current) * 1000) / 1000;
         await completeTranscriptionAction(id, {
           endedAt: new Date().toISOString(),
+          deepgramRequestId: requestIdRef.current ?? undefined,
+          audioSeconds,
         }).catch(() => {});
       })();
     };

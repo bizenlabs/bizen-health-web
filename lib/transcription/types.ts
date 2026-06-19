@@ -4,6 +4,9 @@
 export type TranscriptEvent =
   | { kind: "partial"; text: string; speaker?: number; ts: number }
   | { kind: "final"; text: string; speaker?: number; ts: number }
+  // Deepgram's end-of-stream Metadata: the billable audio duration it
+  // processed and its request id, surfaced for usage metering + reconciliation.
+  | { kind: "metadata"; durationSeconds: number; requestId?: string }
   | { kind: "error"; error: Error }
   | { kind: "closed"; reason: string };
 
