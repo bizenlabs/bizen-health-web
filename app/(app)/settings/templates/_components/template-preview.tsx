@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { findTableBlocks } from "@/lib/markdown-table";
+import { variableLabel } from "@/lib/template-variables";
 
 /**
  * Renders a template body the way it reads as a finished note — a lightweight,
  * dependency-free pass over the small Markdown subset templates use (headings,
  * bullets, bold) plus the two template-DSL markers:
  *
+ *   {{variable}}   patient/date data filled at dictation time — green chip
  *   [placeholder]  a field to fill — shown as a highlighted chip
  *   (instruction)  authoring guidance not kept in the finished note — muted
  *
@@ -15,13 +17,23 @@ import { findTableBlocks } from "@/lib/markdown-table";
  */
 
 // Splits a line into plain text and inline markers, keeping the markers.
-const INLINE = /(\*\*[^*\n]+\*\*|\[[^\]\n]+\]|\([^)\n]+\))/g;
+const INLINE = /(\{\{[\s\w.]+\}\}|\*\*[^*\n]+\*\*|\[[^\]\n]+\]|\([^)\n]+\))/g;
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const BULLET = /^\s*[-*]\s+(.*)$/;
 
 function renderInline(text: string): ReactNode[] {
   return text.split(INLINE).map((part, i) => {
     if (!part) return null;
+    if (part.startsWith("{{") && part.endsWith("}}")) {
+      return (
+        <span
+          key={i}
+          className="rounded bg-emerald-100 px-1 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+        >
+          {variableLabel(part.slice(2, -2))}
+        </span>
+      );
+    }
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
         <strong key={i} className="font-semibold">
