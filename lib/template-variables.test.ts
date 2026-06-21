@@ -1,127 +1,114 @@
 import { describe, expect, it } from "vitest";
-import type { Gender, PatientDetail } from "@/lib/patients";
-import { resolveTemplateVariables, variableLabel } from "./template-variables";
+import type { PatientSummary } from "@/lib/patients";
+import {
+  type PatientVarSource,
+  patientVarsFromSummary,
+  resolveTemplateVariables,
+  variableLabel,
+} from "./template-variables";
 
 // A fixed "now" so age and {{date.today}} are deterministic.
 const NOW = new Date(2026, 5, 21); // 21 Jun 2026 (local)
 
-function aPatient(
-  over: Partial<PatientDetail["demographics"]> = {},
-): PatientDetail {
-  return {
-    id: "pat_1",
-    demographics: {
-      gender: "FEMALE" as Gender,
-      birthdate: "1990-01-15",
-      birthdateEstimated: false,
-      birthtime: null,
-      dead: false,
-      ...over,
-    },
-    name: {
-      prefix: null,
-      givenName: "Sunita",
-      middleName: null,
-      familyNamePrefix: null,
-      familyName: "Devi",
-      familyName2: null,
-      familyNameSuffix: null,
-      degree: null,
-    },
-    address: {
-      address1: null,
-      address2: null,
-      address3: null,
-      cityVillage: null,
-      countyDistrict: null,
-      stateProvince: null,
-      country: null,
-      postalCode: null,
-      latitude: null,
-      longitude: null,
-    },
-    allergyStatus: "UNKNOWN",
-    identifiers: [
-      {
-        id: "id_1",
-        typeId: "t1",
-        typeName: "MRN",
-        identifier: "MRN-0042",
-        preferred: true,
-      },
-    ],
-    deathDate: null,
-    deathdateEstimated: false,
-    causeOfDeath: null,
-    voided: false,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-  };
-}
+const SUNITA: PatientVarSource = {
+  name: "Sunita Devi",
+  birthdate: "1990-01-15",
+  gender: "FEMALE",
+  identifier: "MRN-0042",
+};
 
-const resolve = (content: string, patient: PatientDetail | null) =>
+const resolve = (content: string, patient: PatientVarSource | null) =>
   resolveTemplateVariables(content, { patient, now: NOW });
 
 describe("resolveTemplateVariables — known values", () => {
   it("fills patient name, age, sex, dob and id", () => {
-    const patient = aPatient();
-    expect(resolve("Name: {{patient.name}}", patient)).toBe(
-      "Name: Sunita Devi",
-    );
-    expect(resolve("Age: {{patient.age}}", patient)).toBe("Age: 36");
-    expect(resolve("Sex: {{patient.sex}}", patient)).toBe("Sex: Female");
-    expect(resolve("DOB: {{patient.dob}}", patient)).toBe("DOB: 15 Jan 1990");
-    expect(resolve("ID: {{patient.id}}", patient)).toBe("ID: MRN-0042");
+    expect(resolve("Name: {{patient.name}}", SUNITA)).toBe("Name: Sunita Devi");
+    expect(resolve("Age: {{patient.age}}", SUNITA)).toBe("Age: 36");
+    expect(resolve("Sex: {{patient.sex}}", SUNITA)).toBe("Sex: Female");
+    expect(resolve("DOB: {{patient.dob}}", SUNITA)).toBe("DOB: 15 Jan 1990");
+    expect(resolve("ID: {{patient.id}}", SUNITA)).toBe("ID: MRN-0042");
   });
 
-  it("resolves date.today regardless of patient", () => {
+  it("resolves date.today even with no patient", () => {
     expect(resolve("Date: {{date.today}}", null)).toBe("Date: 21 Jun 2026");
   });
 
   it("fills several markers on one line", () => {
     expect(
-      resolve("{{patient.name}} — {{patient.age}}/{{patient.sex}}", aPatient()),
+      resolve("{{patient.name}} — {{patient.age}}/{{patient.sex}}", SUNITA),
     ).toBe("Sunita Devi — 36/Female");
   });
 
   it("tolerates inner whitespace in the marker", () => {
-    expect(resolve("Name: {{ patient.name }}", aPatient())).toBe(
+    expect(resolve("Name: {{ patient.name }}", SUNITA)).toBe(
       "Name: Sunita Devi",
     );
   });
 });
 
-describe("resolveTemplateVariables — missing data is dropped", () => {
-  it("removes a variable (and its leading space) when the value is unknown", () => {
-    const noDob = aPatient({ birthdate: null });
+describe("resolveTemplateVariables — no patient linked yet", () => {
+  it("leaves patient.* markers in place so they can be filled later", () => {
+    expect(resolve("Name: {{patient.name}}", null)).toBe(
+      "Name: {{patient.name}}",
+    );
+    expect(resolve("{{patient.age}}/{{patient.sex}}", null)).toBe(
+      "{{patient.age}}/{{patient.sex}}",
+    );
+  });
+});
+
+describe("resolveTemplateVariables — linked patient, missing field is dropped", () => {
+  it("removes a variable (and its leading space) when the field is empty", () => {
+    const noDob: PatientVarSource = { ...SUNITA, birthdate: null };
     expect(resolve("Age:{{patient.age}}", noDob)).toBe("Age:");
     expect(resolve("Age: {{patient.age}}", noDob)).toBe("Age:");
   });
 
   it("drops UNKNOWN gender", () => {
     expect(
-      resolve("Sex: {{patient.sex}}", aPatient({ gender: "UNKNOWN" })),
+      resolve("Sex: {{patient.sex}}", { ...SUNITA, gender: "UNKNOWN" }),
     ).toBe("Sex:");
   });
 
-  it("drops all patient variables when there is no patient", () => {
-    expect(resolve("Name: {{patient.name}}, age {{patient.age}}", null)).toBe(
-      "Name:, age",
+  it("drops the name when the patient has no usable name", () => {
+    expect(resolve("Name: {{patient.name}}", { ...SUNITA, name: null })).toBe(
+      "Name:",
     );
-  });
-
-  it("drops the name when the patient has no usable name parts", () => {
-    const patient = aPatient();
-    patient.name = { ...patient.name, givenName: null, familyName: null };
-    expect(resolve("Name: {{patient.name}}", patient)).toBe("Name:");
   });
 });
 
 describe("resolveTemplateVariables — unknown keys", () => {
   it("leaves an unrecognised variable untouched so a typo stays visible", () => {
-    expect(resolve("X: {{patient.phone}}", aPatient())).toBe(
+    expect(resolve("X: {{patient.phone}}", SUNITA)).toBe(
       "X: {{patient.phone}}",
     );
+  });
+});
+
+describe("patientVarsFromSummary", () => {
+  const summary: PatientSummary = {
+    id: "pat_1",
+    preferredName: "Sunita Devi",
+    birthdate: "1990-01-15",
+    birthdateEstimated: false,
+    gender: "FEMALE",
+    primaryIdentifierType: "MRN",
+    primaryIdentifier: "MRN-0042",
+    dead: false,
+  };
+
+  it("maps a summary to the variable source", () => {
+    expect(patientVarsFromSummary(summary)).toEqual(SUNITA);
+  });
+
+  it("treats the 'Unnamed patient' fallback as no name", () => {
+    expect(
+      patientVarsFromSummary({ ...summary, preferredName: "Unnamed patient" }),
+    ).toMatchObject({ name: null });
+  });
+
+  it("returns null for no patient", () => {
+    expect(patientVarsFromSummary(null)).toBeNull();
   });
 });
 

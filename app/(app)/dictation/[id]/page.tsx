@@ -1,13 +1,8 @@
 import { notFound } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
-import {
-  getPatient,
-  type PatientDetail,
-  type PatientSummary,
-} from "@/lib/patients";
+import { getPatient, type PatientSummary } from "@/lib/patients";
 import { detailToPatientSummary } from "@/lib/patient-display";
-import { resolveTemplateVariables } from "@/lib/template-variables";
 import { getTemplate } from "@/lib/templates";
 import { getTranscription } from "@/lib/transcriptions";
 import { DictationEditor } from "../_components/dictation-editor";
@@ -65,28 +60,19 @@ export default async function DictationDetailPage({
     }
   }
 
-  // Resolve the linked patient (if any) so the editor can show + edit the link,
-  // and so template variables can be filled from the patient's data.
+  // Resolve the linked patient (if any) so the editor can show + edit the link.
+  // Template variables ({{patient.*}} / {{date.today}}) are filled in the editor
+  // — at seed and whenever the patient is linked/changed — so a patient added
+  // after the dictation started still fills them.
   let initialPatient: PatientSummary | null = null;
-  let patientDetail: PatientDetail | null = null;
   if (dictation.patientId) {
     try {
-      patientDetail = await getPatient(dictation.patientId, {
-        includeVoided: true,
-      });
-      initialPatient = detailToPatientSummary(patientDetail);
+      initialPatient = detailToPatientSummary(
+        await getPatient(dictation.patientId, { includeVoided: true }),
+      );
     } catch {
       /* patient unavailable — the editor still lets the clinician relink */
     }
-  }
-
-  // Fill {{patient.*}} / {{date.today}} variables from the patient before the
-  // scaffold is seeded — known values are substituted, unresolved markers are
-  // dropped, so the note only ever shows real data. Snapshotted at open time.
-  if (templateContent) {
-    templateContent = resolveTemplateVariables(templateContent, {
-      patient: patientDetail,
-    });
   }
 
   return (
