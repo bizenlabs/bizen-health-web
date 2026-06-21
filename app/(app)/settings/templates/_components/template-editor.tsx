@@ -9,6 +9,7 @@ import { Input } from "@/components/catalyst/input";
 import { Select } from "@/components/catalyst/select";
 import { Textarea } from "@/components/catalyst/textarea";
 import { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
+import { TEMPLATE_VARIABLES } from "@/lib/template-variables";
 import type { TemplateDetail, TemplateVersion } from "@/lib/templates";
 import {
   createTemplateAction,
@@ -204,6 +205,29 @@ function FormattingGuide() {
             AI guidance — not kept in the note
           </span>
         </li>
+        <li className="flex items-baseline gap-2">
+          <code className="rounded bg-emerald-100 px-1 font-mono text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+            {"{{patient.name}}"}
+          </code>
+          <span className="text-zinc-500">
+            filled from the selected patient
+          </span>
+        </li>
+      </ul>
+      <p className="mt-2.5 text-zinc-500">
+        <span className="font-medium">Variables</span> are replaced with the
+        patient’s data when you dictate; if a value is unknown the marker is
+        dropped. Available:
+      </p>
+      <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1.5">
+        {TEMPLATE_VARIABLES.map((v) => (
+          <li key={v.key} className="flex items-baseline gap-1.5">
+            <code className="rounded bg-emerald-100 px-1 font-mono text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+              {v.token}
+            </code>
+            <span className="text-zinc-500">{v.label}</span>
+          </li>
+        ))}
       </ul>
     </div>
   );
