@@ -1,9 +1,20 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import {
+  ChevronDownIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/20/solid";
 import { Button } from "@/components/catalyst/button";
+import {
+  Dropdown,
+  DropdownButton,
+  DropdownDescription,
+  DropdownItem,
+  DropdownLabel,
+  DropdownMenu,
+} from "@/components/catalyst/dropdown";
 import { ErrorMessage, Field, Label } from "@/components/catalyst/fieldset";
 import { Input } from "@/components/catalyst/input";
 import { Select } from "@/components/catalyst/select";
@@ -21,8 +32,6 @@ import {
   type TemplateFormState,
 } from "./template-editor-state";
 import { TemplatePreview } from "./template-preview";
-
-const CAPTION = "mb-1 block text-xs font-medium text-zinc-500";
 
 /**
  * Create / edit form for a template — name, description, category and the
@@ -50,6 +59,23 @@ export function TemplateEditor({
 
   // The body is controlled so the live preview can render what's been typed.
   const [content, setContent] = useState(template?.content ?? "");
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  // Splice a variable token into the body at the caret (replacing any selection),
+  // then restore focus with the caret just after the inserted token.
+  function insertVariable(token: string) {
+    const ta = bodyRef.current;
+    const start = ta?.selectionStart ?? content.length;
+    const end = ta?.selectionEnd ?? content.length;
+    setContent(content.slice(0, start) + token + content.slice(end));
+    const caret = start + token.length;
+    requestAnimationFrame(() => {
+      const el = bodyRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -124,11 +150,39 @@ export function TemplateEditor({
 
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
             <div>
-              <span className={CAPTION}>Editor</span>
+              <div className="mb-1 flex h-7 items-center justify-between">
+                <span className="text-xs font-medium text-zinc-500">
+                  Editor
+                </span>
+                <Dropdown>
+                  <DropdownButton
+                    as="button"
+                    type="button"
+                    className="flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  >
+                    Insert variable
+                    <ChevronDownIcon className="size-3.5" />
+                  </DropdownButton>
+                  <DropdownMenu anchor="bottom end">
+                    {TEMPLATE_VARIABLES.map((v) => (
+                      <DropdownItem
+                        key={v.key}
+                        onClick={() => insertVariable(v.token)}
+                      >
+                        <DropdownLabel>{v.label}</DropdownLabel>
+                        <DropdownDescription className="font-mono">
+                          {v.token}
+                        </DropdownDescription>
+                      </DropdownItem>
+                    ))}
+                  </DropdownMenu>
+                </Dropdown>
+              </div>
               {/* Controlled so the preview renders live; `name` keeps it part
                   of the form submission. Fixed height to match the preview
                   pane — the Catalyst textarea fills its wrapper. */}
               <Textarea
+                ref={bodyRef}
                 name="content"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
@@ -137,7 +191,11 @@ export function TemplateEditor({
               />
             </div>
             <div>
-              <span className={CAPTION}>Preview</span>
+              <div className="mb-1 flex h-7 items-center">
+                <span className="text-xs font-medium text-zinc-500">
+                  Preview
+                </span>
+              </div>
               <TemplatePreview content={content} />
             </div>
           </div>
