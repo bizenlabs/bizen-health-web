@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PatientSummary } from "@/lib/patients";
 import {
+  containsKnownVariable,
   type PatientVarSource,
   patientVarsFromSummary,
   resolveTemplateVariables,
@@ -109,6 +110,14 @@ describe("patientVarsFromSummary", () => {
 
   it("returns null for no patient", () => {
     expect(patientVarsFromSummary(null)).toBeNull();
+  });
+});
+
+describe("containsKnownVariable", () => {
+  it("detects a known marker and ignores plain text and unknown keys", () => {
+    expect(containsKnownVariable("Name: {{patient.name}}")).toBe(true);
+    expect(containsKnownVariable("no markers here")).toBe(false);
+    expect(containsKnownVariable("{{patient.phone}}")).toBe(false);
   });
 });
 

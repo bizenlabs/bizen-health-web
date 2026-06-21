@@ -57,6 +57,16 @@ export function variableLabel(key: string): string {
   return LABEL_BY_KEY.get(key.trim()) ?? key.trim();
 }
 
+/** True if `text` contains at least one known `{{...}}` variable marker. */
+export function containsKnownVariable(text: string): boolean {
+  const re = /\{\{\s*([\w.]+)\s*\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (isKnownVariable(m[1])) return true;
+  }
+  return false;
+}
+
 /**
  * Matches a `{{ key }}` marker and any single space immediately before it, so a
  * removed (missing) variable doesn't leave a double space. Captures the key.

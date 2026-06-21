@@ -12,12 +12,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeftIcon,
+  InformationCircleIcon,
   MicrophoneIcon,
   PauseIcon,
   PlayIcon,
   StopIcon,
   UserIcon,
   UserPlusIcon,
+  XMarkIcon,
 } from "@heroicons/react/20/solid";
 import {
   BetweenHorizontalEnd,
@@ -61,6 +63,7 @@ import { PatientPicker } from "@/components/patient-picker";
 import { patientMeta } from "@/lib/patient-display";
 import type { PatientSummary } from "@/lib/patients";
 import {
+  containsKnownVariable,
   type PatientVarSource,
   patientVarsFromSummary,
   resolveTemplateVariables,
@@ -78,6 +81,7 @@ import { DictationDeleteButton } from "./dictation-delete-button";
 import { DictationExportMenu } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
 import { DictationCaret, dictationCaretKey } from "./dictation-caret";
+import { DictationVariableGhost } from "./dictation-variable-ghost";
 import { EmptySectionDimmer } from "./empty-section-dimmer";
 import {
   applyTableCellPlaceholders,
@@ -447,6 +451,9 @@ export function DictationEditor({
   const [editingPatient, setEditingPatient] = useState(false);
   const [patientBusy, setPatientBusy] = useState(false);
   const [patientError, setPatientError] = useState<string | null>(null);
+  // Shown after switching from one patient to another: already-filled variable
+  // data is a point-in-time snapshot and is NOT rewritten on a patient change.
+  const [variableChangeNotice, setVariableChangeNotice] = useState(false);
   // Which pane the review view shows once recording has stopped: the editable
   // note, or the read-only raw transcript.
   const [activeTab, setActiveTab] = useState<"note" | "transcript">("note");
@@ -535,6 +542,10 @@ export function DictationEditor({
   // Flips true the first time the init effect seeds the editor — gates the
   // streaming effect so it doesn't run before insertPos is resolved.
   const initRef = useRef(false);
+  // Whether the seeded scaffold carried any {{...}} variables — gates the
+  // "patient changed, values not updated" notice so it never fires for a
+  // template that has no variables.
+  const hadVariablesRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The doc position where the next chunk of finalised text will go. Tracked
   // so dictation lands inside a section instead of at the very end. `null`
@@ -582,6 +593,7 @@ export function DictationEditor({
       ...TableExtensions,
       EmptySectionDimmer,
       DictationCaret,
+      DictationVariableGhost,
       Placeholder.configure({
         placeholder: placeholderFn,
         // Hints attach to every empty section node, not just the focused one,
@@ -734,6 +746,9 @@ export function DictationEditor({
       patient: patientVarsFromSummary(patient),
       now: new Date(),
     };
+    hadVariablesRef.current =
+      containsKnownVariable(cleanedMarkdown) ||
+      containsKnownVariable(initialNote ?? "");
 
     if (initialNote) {
       // Clinician has a saved version of this note — load it as-is (a note saved
@@ -1294,6 +1309,7 @@ export function DictationEditor({
   // Link, change, or clear the patient on this dictation. Persists immediately;
   // the local state only advances if the server accepts it.
   async function handleSetPatient(next: PatientSummary | null) {
+    const prev = patient;
     setPatientBusy(true);
     setPatientError(null);
     const res = await setTranscriptionPatientAction(
@@ -1311,6 +1327,12 @@ export function DictationEditor({
           patientVarsFromSummary(next),
           new Date(),
         );
+      }
+      // Switching between two different patients: variable data already filled
+      // from the previous patient is a point-in-time snapshot and is NOT
+      // rewritten — warn so the clinician updates those fields manually.
+      if (hadVariablesRef.current && prev && next && prev.id !== next.id) {
+        setVariableChangeNotice(true);
       }
     } else {
       setPatientError(res.error);
@@ -1518,6 +1540,33 @@ export function DictationEditor({
             </div>
           ) : null}
         </header>
+
+        {/* Patient-changed notice: filled variable data is a snapshot and isn't
+            rewritten on a patient switch. */}
+        {variableChangeNotice ? (
+          <div
+            role="status"
+            className="mt-3 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200"
+          >
+            <InformationCircleIcon
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-blue-500 dark:text-blue-400"
+            />
+            <p className="flex-1">
+              Patient changed. Details already filled from variables (name, age,
+              etc.) reflect the previous patient and were not updated — please
+              review and edit them manually.
+            </p>
+            <button
+              type="button"
+              onClick={() => setVariableChangeNotice(false)}
+              aria-label="Dismiss"
+              className="shrink-0 text-blue-500 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
+            >
+              <XMarkIcon className="size-4" />
+            </button>
+          </div>
+        ) : null}
 
         {/* Divider between the header and the note surface */}
         <hr className="mt-3 border-t border-zinc-200 dark:border-zinc-800" />
