@@ -49,6 +49,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import { Markdown } from "@tiptap/markdown";
 import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
+import type { Mark } from "@tiptap/pm/model";
 import { cellAround, goToNextCell, TableMap } from "@tiptap/pm/tables";
 import { TableExtensions } from "@/lib/editor/table";
 import {
@@ -59,6 +60,11 @@ import {
 import { PatientPicker } from "@/components/patient-picker";
 import { patientMeta } from "@/lib/patient-display";
 import type { PatientSummary } from "@/lib/patients";
+import {
+  type PatientVarSource,
+  patientVarsFromSummary,
+  resolveTemplateVariables,
+} from "@/lib/template-variables";
 import type { TranscriptionMode } from "@/lib/transcriptions";
 import {
   type LiveSegment,
@@ -161,6 +167,48 @@ function blockHasContent(editor: Editor, pos: number): boolean {
   } catch {
     return false;
   }
+}
+
+// Fill any {{...}} template variables still present in the document against the
+// given patient. Used when a patient is linked or changed after the scaffold has
+// already been seeded — known fields are substituted, a linked-but-empty field's
+// marker is dropped, and `patient.*` markers are left untouched when there is no
+// patient yet (see resolveTemplateVariables). Walks text nodes and rewrites only
+// those that change, applying high-to-low so earlier positions stay valid.
+function resolvePatientVariables(
+  editor: Editor,
+  source: PatientVarSource | null,
+  now: Date,
+): void {
+  const edits: {
+    from: number;
+    to: number;
+    text: string;
+    marks: readonly Mark[];
+  }[] = [];
+  editor.state.doc.descendants((node, pos) => {
+    if (!node.isText || !node.text || !node.text.includes("{{")) return;
+    const resolved = resolveTemplateVariables(node.text, {
+      patient: source,
+      now,
+    });
+    if (resolved !== node.text) {
+      edits.push({
+        from: pos,
+        to: pos + node.text.length,
+        text: resolved,
+        marks: node.marks,
+      });
+    }
+  });
+  if (edits.length === 0) return;
+  const tr = editor.state.tr;
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const e = edits[i];
+    if (e.text === "") tr.delete(e.from, e.to);
+    else tr.replaceWith(e.from, e.to, editor.schema.text(e.text, e.marks));
+  }
+  editor.view.dispatch(tr);
 }
 
 /** Text of the nearest heading at or above `pos` — the section `pos` sits in. */
@@ -679,20 +727,35 @@ export function DictationEditor({
     // A saved note is the clinician's own content and is loaded verbatim.
     const seedingTemplate = !initialNote && cleanedMarkdown.length > 0;
 
+    // Fill {{...}} variables from the patient linked at open. With no patient
+    // yet, patient.* markers are left for resolvePatientVariables to fill when
+    // one is linked; date.today still resolves.
+    const varCtx = {
+      patient: patientVarsFromSummary(patient),
+      now: new Date(),
+    };
+
     if (initialNote) {
-      // Clinician has a saved version of this note — load it as-is.
-      editor.commands.setContent(initialNote, {
-        contentType: "markdown",
-        emitUpdate: false,
-      });
+      // Clinician has a saved version of this note — load it as-is (a note saved
+      // before a patient was linked may still carry unfilled markers).
+      editor.commands.setContent(
+        resolveTemplateVariables(initialNote, varCtx),
+        {
+          contentType: "markdown",
+          emitUpdate: false,
+        },
+      );
     } else if (cleanedMarkdown) {
       // Seed the *cleaned* template scaffold — placeholders and instructions
       // stripped. The raw dictation is NOT dumped into the note; it's
       // available read-only in the Transcript tab.
-      editor.commands.setContent(cleanedMarkdown, {
-        contentType: "markdown",
-        emitUpdate: false,
-      });
+      editor.commands.setContent(
+        resolveTemplateVariables(cleanedMarkdown, varCtx),
+        {
+          contentType: "markdown",
+          emitUpdate: false,
+        },
+      );
     } else if (transcriptBody) {
       // Free-form: the note *is* the transcript, so seed it directly.
       editor.commands.setContent(transcriptBody, {
@@ -751,6 +814,9 @@ export function DictationEditor({
     hints,
     transcriptText,
     initialSegments,
+    // Read once for seed-time variable fill; the initRef guard makes re-runs
+    // (e.g. on a later patient relink) a no-op.
+    patient,
   ]);
 
   // --- Voice commands ---------------------------------------------------
@@ -1238,6 +1304,14 @@ export function DictationEditor({
     if (res.ok) {
       setPatient(next);
       setEditingPatient(false);
+      // Fill any variables the scaffold seeded before this patient was linked.
+      if (editor && next) {
+        resolvePatientVariables(
+          editor,
+          patientVarsFromSummary(next),
+          new Date(),
+        );
+      }
     } else {
       setPatientError(res.error);
     }

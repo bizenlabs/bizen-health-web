@@ -1,26 +1,30 @@
-import type { Gender, PatientDetail } from "@/lib/patients";
-import { composePatientName } from "@/lib/patient-display";
+import type { Gender, PatientSummary } from "@/lib/patients";
 
 /**
- * Template variables — deterministic `{{...}}` markers that are filled from the
- * selected patient (and the current date) when a template is seeded into a
- * dictation. They differ from the other two template markers:
+ * Template variables — deterministic `{{...}}` markers filled from the selected
+ * patient (and the current date) when a template is used in a dictation. They
+ * differ from the other two template markers:
  *
- *   {{patient.name}}  variable    — replaced with real data at dictation time
+ *   {{patient.name}}  variable    — replaced with real data
  *   [placeholder]     AI fill     — the model fills this in
  *   (instruction)     guidance    — authoring note, not kept
  *
  * `{{...}}` was chosen because it appears nowhere in template bodies or the
  * `[...]`/`(...)` marker parsers, so it can't collide.
  *
- * This module is deliberately free of `server-only` (the type-only import from
- * `@/lib/patients` is erased at build) so the Client Component template editor
- * can list the available variables and the preview can highlight them. The
- * resolver is a pure function; it runs server-side at the dictation seed step.
+ * Resolution runs client-side in the dictation editor — at seed time and again
+ * whenever the patient is linked or changed — so a patient added *after* the
+ * dictation has started still fills the markers (see `resolveTemplateVariables`
+ * callers in `dictation-editor.tsx`).
  *
- * Missing-data rule: when a variable can't be resolved (e.g. no birthdate, so
- * age is unknown — common with sparse records), the marker is removed entirely.
- * A dictation note only ever shows real data, never an unresolved token.
+ * Two missing-data cases, deliberately different:
+ *  - No patient linked yet → `patient.*` markers are LEFT in place, so they can
+ *    be filled once a patient is chosen. (`date.today` still resolves.)
+ *  - Patient linked but a field is empty (e.g. no birthdate) → that marker is
+ *    removed entirely. A dictation note never shows an unresolved token.
+ *
+ * This module is free of `server-only` (the type-only import from
+ * `@/lib/patients` is erased at build) so Client Components can use it.
  */
 
 export type TemplateVariable = {
@@ -59,8 +63,29 @@ export function variableLabel(key: string): string {
  */
 export const VARIABLE_PATTERN = / ?\{\{\s*([\w.]+)\s*\}\}/g;
 
-/** Just the marker, no leading-space capture — for the preview tokenizer. */
-export const VARIABLE_TOKEN = /\{\{[\s\w.]+\}\}/;
+/** The minimal patient fields the variables need — available from a summary. */
+export type PatientVarSource = {
+  name: string | null;
+  birthdate: string | null;
+  gender: Gender | null;
+  identifier: string | null;
+};
+
+/** Build a variable source from a patient summary, or null if no patient. */
+export function patientVarsFromSummary(
+  p: PatientSummary | null,
+): PatientVarSource | null {
+  if (!p) return null;
+  return {
+    name:
+      p.preferredName && p.preferredName !== "Unnamed patient"
+        ? p.preferredName
+        : null,
+    birthdate: p.birthdate,
+    gender: p.gender,
+    identifier: p.primaryIdentifier,
+  };
+}
 
 const GENDER_LABEL: Record<Gender, string | null> = {
   MALE: "Male",
@@ -107,61 +132,55 @@ function ageYears(birthdate: string | null, now: Date): string | null {
   return age >= 0 && age < 150 ? String(age) : null;
 }
 
-function preferredIdentifier(p: PatientDetail): string | null {
-  const pref = p.identifiers.find((i) => i.preferred) ?? p.identifiers[0];
-  return pref?.identifier ?? null;
-}
-
-/** Resolve one variable key to its value, or null when the data is missing. */
-function resolveValue(
-  key: string,
-  patient: PatientDetail | null,
-  now: Date,
-): string | null {
-  if (key === "date.today") return formatYmd(toYmd(now));
-  if (!patient) return null;
-  switch (key) {
-    case "patient.name": {
-      const name = composePatientName(patient.name);
-      return name === "Unnamed patient" ? null : name;
-    }
-    case "patient.age":
-      return ageYears(patient.demographics.birthdate, now);
-    case "patient.sex":
-      return patient.demographics.gender
-        ? GENDER_LABEL[patient.demographics.gender]
-        : null;
-    case "patient.dob":
-      return formatYmd(patient.demographics.birthdate);
-    case "patient.id":
-      return preferredIdentifier(patient);
-    default:
-      return null;
-  }
-}
-
 function toYmd(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+/** Resolve one variable key to its value, or null when the data is missing. */
+function resolveValue(
+  key: string,
+  patient: PatientVarSource | null,
+  now: Date,
+): string | null {
+  if (key === "date.today") return formatYmd(toYmd(now));
+  if (!patient) return null;
+  switch (key) {
+    case "patient.name":
+      return patient.name;
+    case "patient.age":
+      return ageYears(patient.birthdate, now);
+    case "patient.sex":
+      return patient.gender ? GENDER_LABEL[patient.gender] : null;
+    case "patient.dob":
+      return formatYmd(patient.birthdate);
+    case "patient.id":
+      return patient.identifier;
+    default:
+      return null;
+  }
+}
+
 /**
  * Replace every `{{...}}` variable in `content`:
- *  - known key with data  → its value;
- *  - known key, no data    → removed (with one leading space);
- *  - unknown key           → left untouched (so an author's typo stays visible).
+ *  - known key with data        → its value;
+ *  - known key, patient linked, no value → removed (with one leading space);
+ *  - `patient.*` with no patient linked  → left in place (filled later);
+ *  - unknown key                → left untouched (an author's typo stays visible).
  *
  * `now` is injectable for deterministic tests.
  */
 export function resolveTemplateVariables(
   content: string,
-  ctx: { patient: PatientDetail | null; now?: Date },
+  ctx: { patient: PatientVarSource | null; now?: Date },
 ): string {
   const now = ctx.now ?? new Date();
   return content.replace(VARIABLE_PATTERN, (match, rawKey: string) => {
     const key = rawKey.trim();
     if (!isKnownVariable(key)) return match;
+    // No patient yet: keep patient markers so they can be filled once one is set.
+    if (ctx.patient === null && key.startsWith("patient.")) return match;
     const value = resolveValue(key, ctx.patient, now);
     if (value === null) return ""; // missing → drop the marker (and its space)
     // Preserve a leading space the pattern may have swallowed.
