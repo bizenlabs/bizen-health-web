@@ -61,6 +61,22 @@ body {
   font-style: normal;
 }
 
+/* Unresolved {{variable}} markers (DictationVariableGhost) — shown as the
+   variable's label in ghost text instead of raw `{{patient.name}}` syntax,
+   until a patient is linked and the marker is filled with real data. The inline
+   decoration hides the literal token; the widget draws the label. */
+.ProseMirror .dictation-var-hidden {
+  display: none;
+}
+.ProseMirror .dictation-var-ghost {
+  color: rgb(161 161 170);
+  font-style: italic;
+  pointer-events: none;
+}
+.dark .ProseMirror .dictation-var-ghost {
+  color: rgb(113 113 122);
+}
+
 /* Template section headings whose section body is still empty are dimmed (via
    the EmptySectionDimmer decoration) so an unfilled scaffold doesn't read as a
    wall of equally-weighted headings. The heading un-dims the moment text lands
