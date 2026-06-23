@@ -16,6 +16,7 @@ const SUNITA: PatientVarSource = {
   birthdate: "1990-01-15",
   gender: "FEMALE",
   identifier: "MRN-0042",
+  phone: "+91 98765 43210",
 };
 
 const resolve = (content: string, patient: PatientVarSource | null) =>
@@ -28,6 +29,9 @@ describe("resolveTemplateVariables — known values", () => {
     expect(resolve("Sex: {{patient.sex}}", SUNITA)).toBe("Sex: Female");
     expect(resolve("DOB: {{patient.dob}}", SUNITA)).toBe("DOB: 15 Jan 1990");
     expect(resolve("ID: {{patient.id}}", SUNITA)).toBe("ID: MRN-0042");
+    expect(resolve("Phone: {{patient.phone}}", SUNITA)).toBe(
+      "Phone: +91 98765 43210",
+    );
   });
 
   it("resolves date.today even with no patient", () => {
@@ -76,12 +80,18 @@ describe("resolveTemplateVariables — linked patient, missing field is dropped"
       "Name:",
     );
   });
+
+  it("drops the phone when the patient has none", () => {
+    expect(
+      resolve("Phone: {{patient.phone}}", { ...SUNITA, phone: null }),
+    ).toBe("Phone:");
+  });
 });
 
 describe("resolveTemplateVariables — unknown keys", () => {
   it("leaves an unrecognised variable untouched so a typo stays visible", () => {
-    expect(resolve("X: {{patient.phone}}", SUNITA)).toBe(
-      "X: {{patient.phone}}",
+    expect(resolve("X: {{patient.bloodtype}}", SUNITA)).toBe(
+      "X: {{patient.bloodtype}}",
     );
   });
 });
@@ -95,6 +105,7 @@ describe("patientVarsFromSummary", () => {
     gender: "FEMALE",
     primaryIdentifierType: "MRN",
     primaryIdentifier: "MRN-0042",
+    phoneNumber: "+91 98765 43210",
     dead: false,
   };
 
@@ -117,7 +128,7 @@ describe("containsKnownVariable", () => {
   it("detects a known marker and ignores plain text and unknown keys", () => {
     expect(containsKnownVariable("Name: {{patient.name}}")).toBe(true);
     expect(containsKnownVariable("no markers here")).toBe(false);
-    expect(containsKnownVariable("{{patient.phone}}")).toBe(false);
+    expect(containsKnownVariable("{{patient.bloodtype}}")).toBe(false);
   });
 });
 
@@ -125,6 +136,7 @@ describe("variableLabel", () => {
   it("maps a known key to its label and echoes unknown keys", () => {
     expect(variableLabel("patient.name")).toBe("Patient name");
     expect(variableLabel(" patient.age ")).toBe("Patient age");
-    expect(variableLabel("patient.phone")).toBe("patient.phone");
+    expect(variableLabel("patient.phone")).toBe("Patient phone");
+    expect(variableLabel("patient.bloodtype")).toBe("patient.bloodtype");
   });
 });

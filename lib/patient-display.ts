@@ -66,6 +66,7 @@ export function detailToPatientSummary(d: PatientDetail): PatientSummary {
     gender: d.demographics.gender,
     primaryIdentifierType: pref?.typeName ?? null,
     primaryIdentifier: pref?.identifier ?? null,
+    phoneNumber: d.contact.phoneNumber,
     dead: d.demographics.dead,
   };
 }

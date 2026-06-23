@@ -120,6 +120,7 @@ export default async function PatientDetailPage({
             label="Date of birth"
             value={formatDob(patient.demographics)}
           />
+          <DescRow label="Phone" value={patient.contact.phoneNumber} />
           {patient.demographics.dead ? (
             <>
               <DescRow

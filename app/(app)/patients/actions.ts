@@ -16,6 +16,7 @@ import {
   voidPatient,
   voidPatientIdentifier,
   type Address,
+  type Contact,
   type Gender,
   type RegisterPatientInput,
   type UpdatePatientInput,
@@ -127,6 +128,7 @@ export async function registerPatientAction(
       familyName: familyName || null,
     },
     address: extractAddress(formData),
+    contact: extractContact(formData),
     identifiers,
   };
 
@@ -223,6 +225,7 @@ export async function updatePatientAction(
       familyName: familyName || null,
     },
     address: extractAddress(formData),
+    contact: extractContact(formData),
   };
 
   try {
@@ -349,6 +352,14 @@ export async function restorePatientAction(patientId: string): Promise<void> {
   }
   revalidatePath(`/patients/${patientId}`);
   revalidatePath("/patients");
+}
+
+// Contact is always sent (the phone field is always rendered) so the
+// whole-section-replace update can also *clear* a previously-set number.
+function extractContact(formData: FormData): Contact {
+  const phoneNumber =
+    (formData.get("phoneNumber") ?? "").toString().trim() || null;
+  return { phoneNumber };
 }
 
 function extractAddress(formData: FormData): Address | null {

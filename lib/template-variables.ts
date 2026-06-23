@@ -42,6 +42,7 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { key: "patient.sex", token: "{{patient.sex}}", label: "Patient sex" },
   { key: "patient.dob", token: "{{patient.dob}}", label: "Date of birth" },
   { key: "patient.id", token: "{{patient.id}}", label: "Patient ID / MRN" },
+  { key: "patient.phone", token: "{{patient.phone}}", label: "Patient phone" },
   { key: "date.today", token: "{{date.today}}", label: "Today’s date" },
 ];
 
@@ -79,6 +80,7 @@ export type PatientVarSource = {
   birthdate: string | null;
   gender: Gender | null;
   identifier: string | null;
+  phone: string | null;
 };
 
 /** Build a variable source from a patient summary, or null if no patient. */
@@ -94,6 +96,7 @@ export function patientVarsFromSummary(
     birthdate: p.birthdate,
     gender: p.gender,
     identifier: p.primaryIdentifier,
+    phone: p.phoneNumber,
   };
 }
 
@@ -167,6 +170,8 @@ function resolveValue(
       return formatYmd(patient.birthdate);
     case "patient.id":
       return patient.identifier;
+    case "patient.phone":
+      return patient.phone;
     default:
       return null;
   }
