@@ -108,6 +108,14 @@ export const startTranscription = (body: StartTranscriptionInput) =>
 export const mintDeepgramKey = (id: string) =>
   api<DeepgramKey>(`/v1/transcriptions/${id}/deepgram-key`, { method: "POST" });
 
+/**
+ * A session-less ephemeral key for a quick capture not tied to a transcription
+ * — the dictionary "record a word" affordance. Same short TTL as the
+ * per-session key.
+ */
+export const mintScratchDeepgramKey = () =>
+  api<DeepgramKey>(`/v1/transcriptions/deepgram-key`, { method: "POST" });
+
 export const appendSegments = (id: string, segments: SegmentInput[]) =>
   api<TranscriptionDetail>(`/v1/transcriptions/${id}/segments`, {
     method: "POST",

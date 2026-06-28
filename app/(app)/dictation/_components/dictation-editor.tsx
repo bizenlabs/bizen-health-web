@@ -97,6 +97,12 @@ import {
   type VoiceCommand,
   type VoiceOp,
 } from "@/lib/transcription/voice-commands";
+import {
+  applyCompiledDictionary,
+  compileDictionary,
+  type DictionaryRule,
+} from "@/lib/transcription/dictionary-replace";
+import { useDictionary } from "@/lib/transcription/use-dictionary";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
 // While the mic is live the editor is read-only and finalised utterances are
@@ -474,6 +480,12 @@ export function DictationEditor({
   );
   const voiceCommandsOnRef = useRef(voiceCommandsOn);
   const punctuationOnRef = useRef(punctuationOn);
+  // The clinic's custom dictionary: spoken forms feed Deepgram recognition
+  // (keyterms, passed at start) and the written forms drive the replacement
+  // pass on finalised text (dictRules, read by flushSegments).
+  const { entries: dictEntries, keyterms: dictKeyterms } = useDictionary();
+  const dictKeytermsRef = useRef<string[]>([]);
+  const dictRulesRef = useRef<DictionaryRule[]>([]);
   // Transient "command fired" confirmation shown in the recording HUD.
   const [lastCommand, setLastCommand] = useState<{
     label: string;
@@ -726,7 +738,12 @@ export function DictationEditor({
     }
     void start(
       { mode: "DICTATION", templateId },
-      { existingId: transcriptionId, deviceId, seedSegments: initialSegments },
+      {
+        existingId: transcriptionId,
+        deviceId,
+        seedSegments: initialSegments,
+        keyterms: dictKeytermsRef.current,
+      },
     );
   }, [phase, start, templateId, transcriptionId, initialSegments]);
 
@@ -845,6 +862,15 @@ export function DictationEditor({
       /* ignore */
     }
   }, [voiceCommandsOn]);
+  // Keep the dictionary refs current as the async load resolves. flushSegments
+  // and the start effect read these refs, so a load that finishes after
+  // recording begins still applies replacement on subsequent utterances.
+  useEffect(() => {
+    dictKeytermsRef.current = dictKeyterms;
+  }, [dictKeyterms]);
+  useEffect(() => {
+    dictRulesRef.current = compileDictionary(dictEntries);
+  }, [dictEntries]);
   useEffect(() => {
     punctuationOnRef.current = punctuationOn;
     try {
@@ -1089,8 +1115,13 @@ export function DictationEditor({
           ? parseUtterance(seg.text, { punctuation: punctuationOnRef.current })
           : [{ type: "text", text: seg.text.trim() }];
         for (const op of ops) {
-          if (op.type === "text") insertText(op.text);
-          else applyVoiceCommand(op.command);
+          if (op.type === "text") {
+            // Rewrite custom-dictionary terms ("BP" → "blood pressure") before
+            // inserting. A no-op when the dictionary has no replacement rules.
+            insertText(applyCompiledDictionary(op.text, dictRulesRef.current));
+          } else {
+            applyVoiceCommand(op.command);
+          }
         }
       }
     },

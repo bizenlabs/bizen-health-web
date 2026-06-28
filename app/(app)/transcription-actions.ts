@@ -7,6 +7,7 @@ import {
   appendSegments,
   completeTranscription,
   type DeepgramKey,
+  mintScratchDeepgramKey,
   editTranscriptionNote,
   failTranscription,
   labelSpeaker,
@@ -75,6 +76,18 @@ export async function mintDeepgramKeyAction(
   await requireSession();
   return run(
     () => mintDeepgramKey(transcriptionId),
+    "Failed to obtain a transcription key.",
+  );
+}
+
+// Session-less key for the dictionary "record a word" capture — no
+// transcription behind it, just a short live transcription to fill a field.
+export async function mintScratchDeepgramKeyAction(): Promise<
+  ActionResult<DeepgramKey>
+> {
+  await requireSession();
+  return run(
+    () => mintScratchDeepgramKey(),
     "Failed to obtain a transcription key.",
   );
 }

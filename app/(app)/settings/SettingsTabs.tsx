@@ -15,6 +15,7 @@ const TABS = [
     adminOnly: true,
   },
   { href: "/settings/templates", label: "Note templates", adminOnly: true },
+  { href: "/settings/dictionary", label: "Dictionary", adminOnly: true },
   { href: "/settings/scheduling", label: "Scheduling", adminOnly: true },
   { href: "/settings/team", label: "Team", adminOnly: true },
 ];

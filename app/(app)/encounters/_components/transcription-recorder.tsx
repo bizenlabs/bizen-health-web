@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useDictionary } from "@/lib/transcription/use-dictionary";
 import { useTranscription } from "@/lib/transcription/use-transcription";
 
 // Live encounter-transcription recorder. Streams microphone audio straight to
@@ -12,6 +13,7 @@ export function TranscriptionRecorder({
   encounterId: string;
 }) {
   const router = useRouter();
+  const { keyterms } = useDictionary();
   const { state, error, segments, partial, start, pause, resume, stop } =
     useTranscription();
 
@@ -21,7 +23,7 @@ export function TranscriptionRecorder({
   const busy = state === "starting" || state === "stopping";
 
   async function handleStart() {
-    await start({ mode: "ENCOUNTER", encounterId });
+    await start({ mode: "ENCOUNTER", encounterId }, { keyterms });
   }
 
   async function handleStop() {

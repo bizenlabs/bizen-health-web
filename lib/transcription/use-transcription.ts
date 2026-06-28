@@ -48,6 +48,10 @@ export interface UseTranscriptionResult {
       // resuming a dictation so the live view shows them and new segments are
       // numbered after, not over, them.
       seedSegments?: LiveSegment[];
+      // The clinic's custom-dictionary spoken forms, sent to Deepgram as key
+      // terms to improve recognition. Persisted for the session so a mic switch
+      // reconnects with the same vocabulary.
+      keyterms?: string[];
     },
   ) => Promise<void>;
   // Mute the mic + gate audio without tearing down the Deepgram WS or the
@@ -90,6 +94,9 @@ export function useTranscription(): UseTranscriptionResult {
   // The input the current session was started with — replayed by switchDevice
   // so the reconnected stream keeps the same mode (diarization on/off).
   const inputRef = useRef<StartTranscriptionInput | null>(null);
+  // Custom-dictionary key terms for this session, replayed on a mic switch so
+  // the reconnected Deepgram stream keeps the same vocabulary.
+  const keytermsRef = useRef<string[]>([]);
   // True between session creation and an explicit stop()/failure. The unmount
   // cleanup uses it to finalise a session abandoned by a client-side nav.
   const liveRef = useRef<boolean>(false);
@@ -219,10 +226,12 @@ export function useTranscription(): UseTranscriptionResult {
         deviceId?: string | null;
         existingId?: string;
         seedSegments?: LiveSegment[];
+        keyterms?: string[];
       },
     ) => {
       const seed = opts?.seedSegments ?? [];
       inputRef.current = input;
+      keytermsRef.current = opts?.keyterms ?? [];
       setError(null);
       setState("starting");
       setSegments(seed);
@@ -257,6 +266,7 @@ export function useTranscription(): UseTranscriptionResult {
 
         const stream = createDeepgramStream({
           diarize: input.mode === "ENCOUNTER",
+          keyterms: keytermsRef.current,
         });
         streamRef.current = stream;
         stream.on(handleEvent);
@@ -324,6 +334,7 @@ export function useTranscription(): UseTranscriptionResult {
       try {
         const stream = createDeepgramStream({
           diarize: input.mode === "ENCOUNTER",
+          keyterms: keytermsRef.current,
         });
         streamRef.current = stream;
         stream.on(handleEvent);

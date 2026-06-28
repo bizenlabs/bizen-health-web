@@ -42,9 +42,37 @@ type DeepgramMessage = DeepgramResults | DeepgramMetadata | { type: string };
 export interface DeepgramStreamOptions {
   // Encounter transcriptions diarize (speaker 0/1/…); dictation does not.
   diarize: boolean;
+  // The clinic's custom-dictionary spoken forms, fed to Deepgram as `keyterm`
+  // prompts so accented or unusual terms (drug names, proper nouns) transcribe
+  // correctly. Optional — omit for no custom vocabulary.
+  keyterms?: string[];
 }
 
-function buildListenUrl(diarize: boolean): string {
+// Deepgram caps key-term prompting at 500 tokens per request. We can't count
+// tokens here, so approximate with words and stay well under: cap the count and
+// a word budget. Excess terms are dropped (the dictionary list is ordered, so
+// this is a stable prefix).
+const MAX_KEYTERMS = 100;
+const KEYTERM_WORD_BUDGET = 400;
+
+function appendKeyterms(params: URLSearchParams, keyterms: string[]): void {
+  let budget = KEYTERM_WORD_BUDGET;
+  let count = 0;
+  for (const raw of keyterms) {
+    const term = raw.trim();
+    if (!term) continue;
+    if (count >= MAX_KEYTERMS) break;
+    const words = term.split(/\s+/).length;
+    if (budget - words < 0) break;
+    // nova-3 takes `keyterm` (repeatable). URLSearchParams encodes each value.
+    params.append("keyterm", term);
+    budget -= words;
+    count += 1;
+  }
+}
+
+// Exported for unit testing of the param assembly.
+export function buildListenUrl(diarize: boolean, keyterms: string[] = []): string {
   const params = new URLSearchParams({
     model: "nova-3-medical",
     interim_results: "true",
@@ -58,6 +86,7 @@ function buildListenUrl(diarize: boolean): string {
     channels: "1",
   });
   if (diarize) params.set("diarize", "true");
+  if (keyterms.length > 0) appendKeyterms(params, keyterms);
   return `${LISTEN_URL}?${params.toString()}`;
 }
 
@@ -179,7 +208,10 @@ export function createDeepgramStream(
   return {
     async connect({ getToken }: ConnectOptions) {
       const token = await getToken();
-      ws = new WebSocket(buildListenUrl(opts.diarize), ["token", token]);
+      ws = new WebSocket(
+        buildListenUrl(opts.diarize, opts.keyterms ?? []),
+        ["token", token],
+      );
       ws.binaryType = "arraybuffer";
 
       await new Promise<void>((resolve, reject) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useDictionary } from "@/lib/transcription/use-dictionary";
 import { useTranscription } from "@/lib/transcription/use-transcription";
 
 // The encounter Notes field with a built-in "Dictate" control. Dictated text
@@ -16,6 +17,7 @@ export function DictatableNotesField({
   defaultValue: string;
 }) {
   const [value, setValue] = useState(defaultValue);
+  const { keyterms } = useDictionary();
   const { state, error, segments, partial, start, pause, resume, stop } =
     useTranscription();
   const appendedRef = useRef(0);
@@ -39,7 +41,7 @@ export function DictatableNotesField({
 
   async function handleStart() {
     appendedRef.current = 0;
-    await start({ mode: "DICTATION", encounterId });
+    await start({ mode: "DICTATION", encounterId }, { keyterms });
   }
 
   return (
