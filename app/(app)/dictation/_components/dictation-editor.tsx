@@ -403,6 +403,7 @@ export function DictationEditor({
   initialSegments,
   voided,
   autoRecord,
+  language,
 }: {
   transcriptionId: string;
   // The dictation's name and a preformatted started-at timestamp — rendered in
@@ -426,6 +427,8 @@ export function DictationEditor({
   initialSegments: LiveSegment[];
   voided: boolean;
   autoRecord: boolean;
+  // The tenant's transcription language/accent, resolved server-side.
+  language: string;
 }) {
   const router = useRouter();
   const {
@@ -743,9 +746,10 @@ export function DictationEditor({
         deviceId,
         seedSegments: initialSegments,
         keyterms: dictKeytermsRef.current,
+        language,
       },
     );
-  }, [phase, start, templateId, transcriptionId, initialSegments]);
+  }, [phase, start, templateId, transcriptionId, initialSegments, language]);
 
   // --- One-shot init: seed the editor and place insertPos ---------------
   useEffect(() => {

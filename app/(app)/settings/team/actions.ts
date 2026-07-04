@@ -8,7 +8,7 @@ import {
   inviteTenantUser,
   removeTenantUser,
 } from "@/lib/users";
-import { workos } from "@/lib/workos";
+import { orgMetadataFromSession, workos } from "@/lib/workos";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -63,11 +63,8 @@ export async function inviteMemberAction(
     if (session.orgType === "individual") {
       await workos.organizations.updateOrganization({
         organization: orgId,
-        metadata: {
-          tenant_slug: session.tenantSlug ?? "",
-          tenant_status: session.tenantStatus ?? "active",
-          org_type: "clinic",
-        },
+        // Wholesale metadata replace — preserve the rest, flip only org_type.
+        metadata: { ...orgMetadataFromSession(session), org_type: "clinic" },
       });
     }
     await inviteTenantUser(trimmedEmail, roleSlug);

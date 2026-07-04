@@ -9,8 +9,11 @@ import { useTranscription } from "@/lib/transcription/use-transcription";
 // through the transcription server actions inside the hook.
 export function TranscriptionRecorder({
   encounterId,
+  language,
 }: {
   encounterId: string;
+  // The tenant's transcription language/accent, resolved server-side.
+  language: string;
 }) {
   const router = useRouter();
   const { keyterms } = useDictionary();
@@ -23,7 +26,7 @@ export function TranscriptionRecorder({
   const busy = state === "starting" || state === "stopping";
 
   async function handleStart() {
-    await start({ mode: "ENCOUNTER", encounterId }, { keyterms });
+    await start({ mode: "ENCOUNTER", encounterId }, { keyterms, language });
   }
 
   async function handleStop() {

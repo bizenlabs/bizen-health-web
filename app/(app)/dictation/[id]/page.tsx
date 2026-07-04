@@ -5,6 +5,7 @@ import { getPatient, type PatientSummary } from "@/lib/patients";
 import { detailToPatientSummary } from "@/lib/patient-display";
 import { getTemplate } from "@/lib/templates";
 import { getTranscription } from "@/lib/transcriptions";
+import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "@/lib/transcription/languages";
 import { DictationEditor } from "../_components/dictation-editor";
 
 // The unified dictation surface. Reached from the library, or with a `record`
@@ -15,7 +16,7 @@ export default async function DictationDetailPage({
   params,
   searchParams,
 }: PageProps<"/dictation/[id]">) {
-  await requireSession();
+  const session = await requireSession();
   const { id } = await params;
   const sp = await searchParams;
 
@@ -97,6 +98,9 @@ export default async function DictationDetailPage({
           initialSegments={initialSegments}
           voided={dictation.voided}
           autoRecord={autoRecord}
+          language={
+            session.transcriptionLanguage ?? DEFAULT_TRANSCRIPTION_LANGUAGE
+          }
         />
       </div>
     </div>

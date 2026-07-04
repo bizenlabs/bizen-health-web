@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
-import { workos } from "@/lib/workos";
+import { orgMetadataFromSession, workos } from "@/lib/workos";
 
 export async function updateOrgNameAction(name: string): Promise<void> {
   const session = await requireRole("tenant_admin");
@@ -17,11 +17,7 @@ export async function updateOrgNameAction(name: string): Promise<void> {
   await workos.organizations.updateOrganization({
     organization: session.organizationId,
     name: trimmed,
-    metadata: {
-      tenant_slug: session.tenantSlug ?? "",
-      tenant_status: session.tenantStatus ?? "active",
-      org_type: session.orgType ?? "clinic",
-    },
+    metadata: orgMetadataFromSession(session),
   });
 
   revalidatePath("/", "layout");

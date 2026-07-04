@@ -3,6 +3,7 @@ import type {
   TranscriptEvent,
   TranscriptionStream,
 } from "./types";
+import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "./languages";
 
 // Browser → Deepgram streaming client. Deepgram's browser-auth pattern is a
 // WebSocket subprotocol — `new WebSocket(url, ['token', <key>])` — not an HTTP
@@ -46,6 +47,9 @@ export interface DeepgramStreamOptions {
   // prompts so accented or unusual terms (drug names, proper nouns) transcribe
   // correctly. Optional — omit for no custom vocabulary.
   keyterms?: string[];
+  // The tenant's transcription language/accent (BCP-47). Optional — falls back
+  // to DEFAULT_TRANSCRIPTION_LANGUAGE when the tenant hasn't set one.
+  language?: string;
 }
 
 // Deepgram caps key-term prompting at 500 tokens per request. We can't count
@@ -72,9 +76,18 @@ function appendKeyterms(params: URLSearchParams, keyterms: string[]): void {
 }
 
 // Exported for unit testing of the param assembly.
-export function buildListenUrl(diarize: boolean, keyterms: string[] = []): string {
+export function buildListenUrl(
+  diarize: boolean,
+  keyterms: string[] = [],
+  language: string = DEFAULT_TRANSCRIPTION_LANGUAGE,
+): string {
   const params = new URLSearchParams({
     model: "nova-3-medical",
+    // Per-tenant language/accent. nova-3-medical supports the English accent
+    // variants (en-IN for Indian-accented speech, en for all-accents, …).
+    // Without an explicit language Deepgram defaults to generic English, which
+    // mishears Indian-accented speech.
+    language,
     interim_results: "true",
     smart_format: "true",
     // Abbreviate spoken metric units in transcripts: "centimeter" → "cm",
@@ -209,7 +222,7 @@ export function createDeepgramStream(
     async connect({ getToken }: ConnectOptions) {
       const token = await getToken();
       ws = new WebSocket(
-        buildListenUrl(opts.diarize, opts.keyterms ?? []),
+        buildListenUrl(opts.diarize, opts.keyterms ?? [], opts.language),
         ["token", token],
       );
       ws.binaryType = "arraybuffer";

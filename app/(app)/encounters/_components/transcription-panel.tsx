@@ -2,6 +2,7 @@ import {
   getTranscription,
   listTranscriptionsForEncounter,
 } from "@/lib/transcriptions";
+import { getTenantTranscriptionLanguage } from "@/lib/transcription/tenant-language";
 import { TranscriptionRecorder } from "./transcription-recorder";
 import { TranscriptView } from "./transcript-view";
 
@@ -13,7 +14,10 @@ export async function TranscriptionPanel({
 }: {
   encounterId: string;
 }) {
-  const summaries = await listTranscriptionsForEncounter(encounterId);
+  const [summaries, language] = await Promise.all([
+    listTranscriptionsForEncounter(encounterId),
+    getTenantTranscriptionLanguage(),
+  ]);
   // Encounters carry only a handful of transcriptions; fetch each detail so
   // the saved transcripts render in full.
   const details = await Promise.all(
@@ -26,7 +30,7 @@ export async function TranscriptionPanel({
         Transcription
       </h2>
       <div className="mt-3">
-        <TranscriptionRecorder encounterId={encounterId} />
+        <TranscriptionRecorder encounterId={encounterId} language={language} />
       </div>
       {details.map((t) => (
         <TranscriptView key={t.id} transcription={t} />

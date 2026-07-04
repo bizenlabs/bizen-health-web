@@ -15,6 +15,7 @@ import type {
 } from "@/lib/transcriptions";
 import { type AudioCapture, createAudioCapture } from "./audio-capture";
 import { createDeepgramStream } from "./deepgram-client";
+import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "./languages";
 import type { TranscriptEvent, TranscriptionStream } from "./types";
 
 // Orchestrates one browser-side transcription session, shared by the encounter
@@ -52,6 +53,9 @@ export interface UseTranscriptionResult {
       // terms to improve recognition. Persisted for the session so a mic switch
       // reconnects with the same vocabulary.
       keyterms?: string[];
+      // The tenant's transcription language/accent (Deepgram BCP-47 tag).
+      // Persisted for the session so a mic-switch reconnect keeps it.
+      language?: string;
     },
   ) => Promise<void>;
   // Mute the mic + gate audio without tearing down the Deepgram WS or the
@@ -97,6 +101,7 @@ export function useTranscription(): UseTranscriptionResult {
   // Custom-dictionary key terms for this session, replayed on a mic switch so
   // the reconnected Deepgram stream keeps the same vocabulary.
   const keytermsRef = useRef<string[]>([]);
+  const languageRef = useRef<string>(DEFAULT_TRANSCRIPTION_LANGUAGE);
   // True between session creation and an explicit stop()/failure. The unmount
   // cleanup uses it to finalise a session abandoned by a client-side nav.
   const liveRef = useRef<boolean>(false);
@@ -227,11 +232,13 @@ export function useTranscription(): UseTranscriptionResult {
         existingId?: string;
         seedSegments?: LiveSegment[];
         keyterms?: string[];
+        language?: string;
       },
     ) => {
       const seed = opts?.seedSegments ?? [];
       inputRef.current = input;
       keytermsRef.current = opts?.keyterms ?? [];
+      languageRef.current = opts?.language ?? DEFAULT_TRANSCRIPTION_LANGUAGE;
       setError(null);
       setState("starting");
       setSegments(seed);
@@ -267,6 +274,7 @@ export function useTranscription(): UseTranscriptionResult {
         const stream = createDeepgramStream({
           diarize: input.mode === "ENCOUNTER",
           keyterms: keytermsRef.current,
+          language: languageRef.current,
         });
         streamRef.current = stream;
         stream.on(handleEvent);
@@ -335,6 +343,7 @@ export function useTranscription(): UseTranscriptionResult {
         const stream = createDeepgramStream({
           diarize: input.mode === "ENCOUNTER",
           keyterms: keytermsRef.current,
+          language: languageRef.current,
         });
         streamRef.current = stream;
         stream.on(handleEvent);
