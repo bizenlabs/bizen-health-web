@@ -14,8 +14,8 @@ export default async function TranscriptionSettingsPage() {
       <h1 className="text-2xl font-semibold">Transcription</h1>
       <p className="mt-1 max-w-xl text-sm text-zinc-600 dark:text-zinc-400">
         The language and accent used to transcribe this clinic&apos;s dictations
-        and consultations. Pick the accent that best matches your clinicians —
-        matching the accent noticeably improves accuracy. Applies to everyone in
+        and consultations. Pick the one that best matches how your clinicians
+        speak — matching it noticeably improves accuracy. Applies to everyone in
         the clinic.
       </p>
 

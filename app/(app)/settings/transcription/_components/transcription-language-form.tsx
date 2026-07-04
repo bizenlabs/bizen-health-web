@@ -48,17 +48,33 @@ export function TranscriptionLanguageForm({
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
         >
-          {TRANSCRIPTION_LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.label}
-            </option>
-          ))}
+          <optgroup label="English">
+            {TRANSCRIPTION_LANGUAGES.filter((l) => l.group === "English").map(
+              (l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ),
+            )}
+          </optgroup>
+          <optgroup label="Indian languages">
+            {TRANSCRIPTION_LANGUAGES.filter(
+              (l) => l.group === "Indian languages",
+            ).map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </optgroup>
         </Select>
       </Field>
 
       <p className="mt-2 text-xs text-zinc-500">
-        Only English accents are available today. Hindi and other languages are
-        coming and will appear here once supported.
+        English options use a medical-tuned model for better drug and clinical
+        terminology. Non-English options use the general model (no medical
+        tuning) — your dictionary terms still apply. &quot;Hindi + English
+        (mixed)&quot; transcribes both in one recording for clinicians who
+        switch between them.
       </p>
 
       <div className="mt-4 flex items-center gap-3">

@@ -1,28 +1,100 @@
-// Transcription language/accent options offered per tenant, and the default.
+// Transcription language/accent options offered per tenant, the default, and
+// the Deepgram model each one requires.
 //
-// These are the accent variants of Deepgram's `nova-3-medical` model (which is
-// English-only). "en-IN" transcribes Indian-accented English; "en" is the
-// all-accents general model; the rest pin a specific regional accent. A clinic
-// picks one default in Settings → Transcription and it feeds Deepgram's
-// `language` param.
+// Deepgram splits along a model boundary we have to respect:
+//   - English accent variants run on `nova-3-medical`, which keeps the
+//     medical-tuned vocabulary but is English-only.
+//   - Every non-English language (Hindi, the multilingual code-switching
+//     "multi" option, and the regional Indian languages) runs on the general
+//     `nova-3` model — the medical model does not support them.
+// So the chosen language determines the model; `modelForTranscriptionLanguage`
+// is the single source of that mapping.
 //
-// Non-English languages (Hindi, Marathi, …) are NOT here yet: they need the
-// general `nova-3` model (`language=hi`/`multi`), not the medical one, so they
-// require a model switch as a follow-up. Keep this list to what the current
-// model actually supports so a tenant can't select a language that silently
-// fails.
+// Only languages Deepgram actually supports in real-time STREAMING on these
+// models belong here, so a tenant can never select one that silently fails.
 //
 // Plain module — no "server-only"/"use client" — so server pages, the settings
 // client form, and the browser Deepgram client can all import it.
 
 export const DEFAULT_TRANSCRIPTION_LANGUAGE = "en-IN";
 
+// Medical-tuned, English-only. General model — all other languages.
+const MEDICAL_MODEL = "nova-3-medical";
+const GENERAL_MODEL = "nova-3";
+
+export type TranscriptionLanguageGroup = "English" | "Indian languages";
+
 export const TRANSCRIPTION_LANGUAGES = [
-  { code: "en-IN", label: "English — Indian accent" },
-  { code: "en", label: "English — all accents" },
-  { code: "en-US", label: "English — US" },
-  { code: "en-GB", label: "English — UK" },
-  { code: "en-AU", label: "English — Australian" },
+  // English accent variants — keep the medical-tuned model.
+  {
+    code: "en-IN",
+    label: "English — Indian accent",
+    group: "English",
+    model: MEDICAL_MODEL,
+  },
+  {
+    code: "en",
+    label: "English — all accents",
+    group: "English",
+    model: MEDICAL_MODEL,
+  },
+  {
+    code: "en-US",
+    label: "English — US",
+    group: "English",
+    model: MEDICAL_MODEL,
+  },
+  {
+    code: "en-GB",
+    label: "English — UK",
+    group: "English",
+    model: MEDICAL_MODEL,
+  },
+  {
+    code: "en-AU",
+    label: "English — Australian",
+    group: "English",
+    model: MEDICAL_MODEL,
+  },
+  // Non-English — general nova-3 (no medical vocabulary). "multi" transcribes
+  // mixed Hindi + English (code-switching) in one stream — the common pattern
+  // for clinicians who speak Hindi but say drug/term names in English.
+  {
+    code: "multi",
+    label: "Hindi + English (mixed)",
+    group: "Indian languages",
+    model: GENERAL_MODEL,
+  },
+  {
+    code: "hi",
+    label: "Hindi",
+    group: "Indian languages",
+    model: GENERAL_MODEL,
+  },
+  {
+    code: "mr",
+    label: "Marathi",
+    group: "Indian languages",
+    model: GENERAL_MODEL,
+  },
+  {
+    code: "bn",
+    label: "Bengali",
+    group: "Indian languages",
+    model: GENERAL_MODEL,
+  },
+  {
+    code: "ta",
+    label: "Tamil",
+    group: "Indian languages",
+    model: GENERAL_MODEL,
+  },
+  {
+    code: "te",
+    label: "Telugu",
+    group: "Indian languages",
+    model: GENERAL_MODEL,
+  },
 ] as const;
 
 export type TranscriptionLanguageCode =
@@ -34,4 +106,18 @@ export function isSupportedTranscriptionLanguage(code: string): boolean {
 
 export function transcriptionLanguageLabel(code: string): string {
   return TRANSCRIPTION_LANGUAGES.find((l) => l.code === code)?.label ?? code;
+}
+
+// The Deepgram model a given language must run on. Unknown codes fall back to
+// the medical model (the historical default was English on nova-3-medical).
+export function modelForTranscriptionLanguage(code: string): string {
+  return (
+    TRANSCRIPTION_LANGUAGES.find((l) => l.code === code)?.model ?? MEDICAL_MODEL
+  );
+}
+
+// English variants are the only ones on the medical model and the only ones
+// that support the metric-`measurements` formatting feature.
+export function isEnglishTranscriptionLanguage(code: string): boolean {
+  return code === "en" || code.startsWith("en-");
 }

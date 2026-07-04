@@ -3,7 +3,11 @@ import type {
   TranscriptEvent,
   TranscriptionStream,
 } from "./types";
-import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "./languages";
+import {
+  DEFAULT_TRANSCRIPTION_LANGUAGE,
+  isEnglishTranscriptionLanguage,
+  modelForTranscriptionLanguage,
+} from "./languages";
 
 // Browser → Deepgram streaming client. Deepgram's browser-auth pattern is a
 // WebSocket subprotocol — `new WebSocket(url, ['token', <key>])` — not an HTTP
@@ -82,22 +86,25 @@ export function buildListenUrl(
   language: string = DEFAULT_TRANSCRIPTION_LANGUAGE,
 ): string {
   const params = new URLSearchParams({
-    model: "nova-3-medical",
-    // Per-tenant language/accent. nova-3-medical supports the English accent
-    // variants (en-IN for Indian-accented speech, en for all-accents, …).
-    // Without an explicit language Deepgram defaults to generic English, which
-    // mishears Indian-accented speech.
+    // The model follows the language: English accents → nova-3-medical
+    // (medical vocabulary), every other language → general nova-3.
+    model: modelForTranscriptionLanguage(language),
+    // Per-tenant language/accent. English variants (en-IN, en, …), the mixed
+    // Hindi+English "multi" code-switching option, or a single non-English
+    // language (hi, mr, bn, ta, te).
     language,
     interim_results: "true",
     smart_format: "true",
-    // Abbreviate spoken metric units in transcripts: "centimeter" → "cm",
-    // "milligram" → "mg", etc. Independent of smart_format (no conflict, unlike
-    // `numerals`). Covers metric mass/volume/length only.
-    measurements: "true",
     encoding: "linear16",
     sample_rate: "16000",
     channels: "1",
   });
+  // Abbreviate spoken metric units ("centimeter" → "cm", "milligram" → "mg").
+  // English-oriented, so only request it for English languages — other
+  // languages don't support it.
+  if (isEnglishTranscriptionLanguage(language)) {
+    params.set("measurements", "true");
+  }
   if (diarize) params.set("diarize", "true");
   if (keyterms.length > 0) appendKeyterms(params, keyterms);
   return `${LISTEN_URL}?${params.toString()}`;
