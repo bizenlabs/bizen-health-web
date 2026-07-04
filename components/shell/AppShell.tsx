@@ -48,8 +48,10 @@ import {
   Cog6ToothIcon,
   HomeIcon,
   MicrophoneIcon,
+  ShieldCheckIcon,
   UsersIcon,
 } from "@heroicons/react/20/solid";
+import { Can } from "@/components/auth/Can";
 
 type Membership = {
   organizationId: string;
@@ -249,6 +251,21 @@ export function AppShell({
               </SidebarSection>
 
               <SidebarSpacer />
+
+              {/* Staff-only. Jumps out of the tenant app into the
+                  cross-tenant super-admin console (its own layout). UX gate
+                  only — `/admin` re-checks the role server-side. */}
+              <Can role="super_admin">
+                <SidebarSection>
+                  <SidebarItem
+                    href="/admin"
+                    current={pathname.startsWith("/admin")}
+                  >
+                    <ShieldCheckIcon />
+                    <SidebarLabel>Admin</SidebarLabel>
+                  </SidebarItem>
+                </SidebarSection>
+              </Can>
             </SidebarBody>
 
             <SidebarFooter className="max-lg:hidden">
