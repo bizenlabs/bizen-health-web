@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DocumentDuplicateIcon } from "@heroicons/react/20/solid";
 import { useFormStatus } from "react-dom";
 import { CATEGORY_LABEL } from "@/lib/template-categories";
+import { SPECIALTY_LABEL } from "@/lib/template-specialties";
 import type { TemplateSummary } from "@/lib/templates";
 import {
   cloneTemplateAction,
@@ -46,9 +47,12 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
         </Link>
       </div>
 
-      {/* Category */}
+      {/* Category + specialty */}
       <div className="mb-2 flex flex-wrap gap-1.5">
         <Badge>{CATEGORY_LABEL[template.category]}</Badge>
+        {template.specialty ? (
+          <Badge tone="zinc">{SPECIALTY_LABEL[template.specialty]}</Badge>
+        ) : null}
       </div>
 
       {/* Description */}

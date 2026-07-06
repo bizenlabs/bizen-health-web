@@ -14,6 +14,10 @@ import clsx from "clsx";
 import { PatientPicker } from "@/components/patient-picker";
 import type { PatientSummary } from "@/lib/patients";
 import { CATEGORY_LABEL } from "@/lib/template-categories";
+import {
+  SPECIALTY_LABEL,
+  type TemplateSpecialty,
+} from "@/lib/template-specialties";
 import type { TemplateSummary } from "@/lib/templates";
 import { useAudioDevices } from "@/lib/transcription/use-audio-devices";
 
@@ -67,6 +71,7 @@ export function DictationIntake({
   const { devices, selectedDeviceId, setSelectedDeviceId, hasLabels, refresh } =
     useAudioDevices();
   const [search, setSearch] = useState("");
+  const [specialty, setSpecialty] = useState<TemplateSpecialty | "">("");
   const [page, setPage] = useState(1);
   const [patient, setPatient] = useState<PatientSummary | null>(null);
 
@@ -76,16 +81,34 @@ export function DictationIntake({
     [templates],
   );
 
+  // Only offer specialty chips for specialties the catalogue actually has.
+  const specialties = useMemo(() => {
+    const present = new Set<TemplateSpecialty>();
+    for (const t of pickable) if (t.specialty) present.add(t.specialty);
+    return [...present].sort((a, b) =>
+      SPECIALTY_LABEL[a].localeCompare(SPECIALTY_LABEL[b]),
+    );
+  }, [pickable]);
+
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return pickable;
-    return pickable.filter(
-      (t) =>
+    return pickable.filter((t) => {
+      // A specialty chip keeps general-purpose templates visible — a
+      // pediatrician still wants the plain SOAP note alongside pediatric ones.
+      if (specialty && t.specialty !== null && t.specialty !== specialty) {
+        return false;
+      }
+      if (!needle) return true;
+      return (
         t.name.toLowerCase().includes(needle) ||
         (t.description ?? "").toLowerCase().includes(needle) ||
-        CATEGORY_LABEL[t.category].toLowerCase().includes(needle),
-    );
-  }, [pickable, search]);
+        CATEGORY_LABEL[t.category].toLowerCase().includes(needle) ||
+        (t.specialty
+          ? SPECIALTY_LABEL[t.specialty].toLowerCase().includes(needle)
+          : false)
+      );
+    });
+  }, [pickable, search, specialty]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -228,6 +251,32 @@ export function DictationIntake({
           ) : null}
         </div>
 
+        {specialties.length > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <SpecialtyChip
+              active={specialty === ""}
+              onClick={() => {
+                setSpecialty("");
+                setPage(1);
+              }}
+            >
+              All
+            </SpecialtyChip>
+            {specialties.map((s) => (
+              <SpecialtyChip
+                key={s}
+                active={specialty === s}
+                onClick={() => {
+                  setSpecialty(specialty === s ? "" : s);
+                  setPage(1);
+                }}
+              >
+                {SPECIALTY_LABEL[s]}
+              </SpecialtyChip>
+            ))}
+          </div>
+        ) : null}
+
         {pickable.length === 0 ? (
           <p className="mt-3 rounded-xl border border-dashed border-zinc-200 px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
             No templates available. Create one under Settings → Note templates,
@@ -235,7 +284,7 @@ export function DictationIntake({
           </p>
         ) : filtered.length === 0 ? (
           <p className="mt-3 rounded-xl border border-dashed border-zinc-200 px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-            No templates matching “{search}”.
+            No templates matching your filters.
           </p>
         ) : (
           <>
@@ -296,6 +345,32 @@ export function DictationIntake({
         )}
       </motion.div>
     </motion.div>
+  );
+}
+
+function SpecialtyChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={clsx(
+        "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+        active
+          ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+          : "border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

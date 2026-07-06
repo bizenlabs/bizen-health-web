@@ -8,12 +8,15 @@ import {
   cloneTemplate,
   createTemplate,
   deleteTemplate,
+  promoteTemplate,
   restoreTemplate,
   restoreTemplateVersion,
   retireTemplate,
   setDefaultTemplate,
   TEMPLATE_CATEGORIES,
+  TEMPLATE_SPECIALTIES,
   type TemplateCategory,
+  type TemplateSpecialty,
   updateTemplate,
 } from "@/lib/templates";
 import type { TemplateFormState } from "./_components/template-editor-state";
@@ -58,17 +61,24 @@ function readInput(formData: FormData):
       name: string;
       description: string | null;
       category: TemplateCategory;
+      specialty: TemplateSpecialty | null;
       content: string;
+      exampleOutput: string | null;
     }
   | { ok: false; state: TemplateFormState } {
   const name = str(formData, "name");
   const description = str(formData, "description");
   const category = str(formData, "category");
+  const specialty = str(formData, "specialty");
   // Browsers submit <textarea> values with CRLF line endings; normalise to
   // plain \n so the stored Markdown body stays consistent.
   const content = (formData.get("content") ?? "")
     .toString()
     .replace(/\r\n?/g, "\n");
+  const exampleOutput = (formData.get("exampleOutput") ?? "")
+    .toString()
+    .replace(/\r\n?/g, "\n")
+    .trim();
 
   if (!name) {
     return {
@@ -82,12 +92,23 @@ function readInput(formData: FormData):
       state: fail(null, { category: "Choose a category for the template." }),
     };
   }
+  if (
+    specialty &&
+    !TEMPLATE_SPECIALTIES.includes(specialty as TemplateSpecialty)
+  ) {
+    return {
+      ok: false,
+      state: fail(null, { specialty: "Choose a specialty from the list." }),
+    };
+  }
   return {
     ok: true,
     name,
     description: description || null,
     category: category as TemplateCategory,
+    specialty: specialty ? (specialty as TemplateSpecialty) : null,
     content,
+    exampleOutput: exampleOutput || null,
   };
 }
 
@@ -106,7 +127,9 @@ export async function createTemplateAction(
       name: input.name,
       description: input.description,
       category: input.category,
+      specialty: input.specialty,
       content: input.content,
+      exampleOutput: input.exampleOutput,
     });
     id = created.id;
   } catch (err) {
@@ -132,7 +155,9 @@ export async function updateTemplateAction(
       name: input.name,
       description: input.description,
       category: input.category,
+      specialty: input.specialty,
       content: input.content,
+      exampleOutput: input.exampleOutput,
     });
   } catch (err) {
     return fromApiError(err, "Could not save your changes.");
@@ -201,6 +226,21 @@ export async function cloneTemplateAction(id: string): Promise<void> {
   }
   revalidatePath(LIST_PATH);
   redirect(`${LIST_PATH}/${copyId}`);
+}
+
+/**
+ * Promote a tenant template into the global system-template library — makes it
+ * available to every clinic on the platform. Super-admin only.
+ */
+export async function promoteTemplateAction(id: string): Promise<void> {
+  await requireRole("super_admin");
+  try {
+    await promoteTemplate(id);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not promote the template.");
+  }
+  revalidatePath(LIST_PATH);
 }
 
 export async function restoreTemplateVersionAction(

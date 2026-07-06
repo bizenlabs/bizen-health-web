@@ -12,6 +12,11 @@ import {
   TEMPLATE_CATEGORIES,
   type TemplateCategory,
 } from "@/lib/template-categories";
+import {
+  SPECIALTY_LABEL,
+  TEMPLATE_SPECIALTIES,
+  type TemplateSpecialty,
+} from "@/lib/template-specialties";
 import type { TemplateSource, TemplateSummary } from "@/lib/templates";
 import { TemplateCard } from "./template-card";
 
@@ -46,6 +51,9 @@ export function TemplateBrowser({
 }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<TemplateCategory | "">("");
+  const [specialty, setSpecialty] = useState<
+    TemplateSpecialty | "GENERAL" | ""
+  >("");
   const [source, setSource] = useState<TemplateSource | "">("");
   const [showRetired, setShowRetired] = useState(false);
   const [page, setPage] = useState(1);
@@ -56,6 +64,10 @@ export function TemplateBrowser({
       if (!showRetired && t.retired) return false;
       if (source && t.source !== source) return false;
       if (category && t.category !== category) return false;
+      if (specialty === "GENERAL" && t.specialty !== null) return false;
+      if (specialty && specialty !== "GENERAL" && t.specialty !== specialty) {
+        return false;
+      }
       if (
         needle &&
         !t.name.toLowerCase().includes(needle) &&
@@ -65,7 +77,7 @@ export function TemplateBrowser({
       }
       return true;
     });
-  }, [templates, search, category, source, showRetired]);
+  }, [templates, search, category, specialty, source, showRetired]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -119,6 +131,24 @@ export function TemplateBrowser({
           {TEMPLATE_CATEGORIES.map((c) => (
             <option key={c} value={c}>
               {CATEGORY_LABEL[c]}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={specialty}
+          onChange={(e) =>
+            onFilterChange(setSpecialty)(
+              e.target.value as TemplateSpecialty | "GENERAL" | "",
+            )
+          }
+          className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm dark:border-zinc-800 dark:bg-transparent"
+        >
+          <option value="">All specialties</option>
+          <option value="GENERAL">General</option>
+          {TEMPLATE_SPECIALTIES.map((s) => (
+            <option key={s} value={s}>
+              {SPECIALTY_LABEL[s]}
             </option>
           ))}
         </select>

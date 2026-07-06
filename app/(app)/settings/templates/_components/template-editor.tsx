@@ -18,7 +18,12 @@ import {
 import { ErrorMessage, Field, Label } from "@/components/catalyst/fieldset";
 import { Input } from "@/components/catalyst/input";
 import { Select } from "@/components/catalyst/select";
+import { Textarea } from "@/components/catalyst/textarea";
 import { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
+import {
+  SPECIALTY_LABEL,
+  TEMPLATE_SPECIALTIES,
+} from "@/lib/template-specialties";
 import { TEMPLATE_VARIABLES } from "@/lib/template-variables";
 import type { TemplateDetail, TemplateVersion } from "@/lib/templates";
 import {
@@ -59,6 +64,9 @@ export function TemplateEditor({
 
   // The body is controlled so the live preview can render what's been typed.
   const [content, setContent] = useState(template?.content ?? "");
+  const [exampleOutput, setExampleOutput] = useState(
+    template?.exampleOutput ?? "",
+  );
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   // Splice a variable token into the body at the caret (replacing any selection),
@@ -135,6 +143,25 @@ export function TemplateEditor({
           </Field>
 
           <Field>
+            <Label>Specialty</Label>
+            <Select
+              name="specialty"
+              defaultValue={template?.specialty ?? ""}
+              invalid={!!state.fieldErrors.specialty}
+            >
+              <option value="">General</option>
+              {TEMPLATE_SPECIALTIES.map((specialty) => (
+                <option key={specialty} value={specialty}>
+                  {SPECIALTY_LABEL[specialty]}
+                </option>
+              ))}
+            </Select>
+            {state.fieldErrors.specialty ? (
+              <ErrorMessage>{state.fieldErrors.specialty}</ErrorMessage>
+            ) : null}
+          </Field>
+
+          <Field className="sm:col-span-3">
             <Label>Description</Label>
             <Input
               name="description"
@@ -202,6 +229,25 @@ export function TemplateEditor({
           {state.fieldErrors.content ? (
             <ErrorMessage>{state.fieldErrors.content}</ErrorMessage>
           ) : null}
+        </Field>
+
+        <Field className="mt-6">
+          <Label>Example output (optional)</Label>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            A worked example of a finished note produced from this template.
+            Shown alongside the skeleton so clinicians can judge the template at
+            a glance.
+          </p>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            <Textarea
+              name="exampleOutput"
+              rows={10}
+              value={exampleOutput}
+              onChange={(e) => setExampleOutput(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <TemplatePreview content={exampleOutput} />
+          </div>
         </Field>
 
         {isEdit && state.savedAt ? (

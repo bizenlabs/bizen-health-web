@@ -1,6 +1,7 @@
 import "server-only";
 import { api } from "@/lib/api";
 import type { TemplateCategory } from "@/lib/template-categories";
+import type { TemplateSpecialty } from "@/lib/template-specialties";
 
 /**
  * Clinical note templates. The catalogue merges two stores:
@@ -20,6 +21,12 @@ import type { TemplateCategory } from "@/lib/template-categories";
 
 export { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
 export type { TemplateCategory } from "@/lib/template-categories";
+export {
+  SPECIALTY_LABEL,
+  TEMPLATE_SPECIALTIES,
+  specialtyLabel,
+} from "@/lib/template-specialties";
+export type { TemplateSpecialty } from "@/lib/template-specialties";
 
 /** Which store a row comes from. */
 export type TemplateSource = "SYSTEM" | "TENANT";
@@ -31,6 +38,7 @@ export type TemplateSummary = {
   name: string;
   description: string | null;
   category: TemplateCategory;
+  specialty: TemplateSpecialty | null;
   editable: boolean;
   isDefault: boolean;
   effectiveDefault: boolean;
@@ -42,6 +50,7 @@ export type TemplateSummary = {
 /** Full template, including the Markdown `content`. */
 export type TemplateDetail = TemplateSummary & {
   content: string | null;
+  exampleOutput: string | null;
   parentTemplateId: string | null;
   createdAt: string;
 };
@@ -52,7 +61,9 @@ export type TemplateVersion = {
   name: string;
   description: string | null;
   category: TemplateCategory;
+  specialty: TemplateSpecialty | null;
   content: string | null;
+  exampleOutput: string | null;
   createdAt: string;
 };
 
@@ -61,7 +72,9 @@ export type TemplateInput = {
   name: string;
   description: string | null;
   category: TemplateCategory;
+  specialty: TemplateSpecialty | null;
   content: string;
+  exampleOutput: string | null;
 };
 
 /** Templates for the active tenant; retired rows only when asked for. */
@@ -106,6 +119,13 @@ export const cloneTemplate = (id: string) =>
 /** Make a template the default for its category, demoting the current one. */
 export const setDefaultTemplate = (id: string) =>
   api<TemplateDetail>(`/v1/templates/${id}/default`, { method: "POST" });
+
+/**
+ * Promote a tenant template into the global system-template library, making it
+ * available to every tenant. Super-admin only (the API enforces the role).
+ */
+export const promoteTemplate = (id: string) =>
+  api<TemplateDetail>(`/v1/templates/${id}/promote`, { method: "POST" });
 
 export const listTemplateVersions = (id: string) =>
   api<TemplateVersion[]>(`/v1/templates/${id}/versions`);

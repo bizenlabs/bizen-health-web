@@ -20,6 +20,12 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           >
             Usage &amp; cost
           </Link>
+          <Link
+            href="/admin/templates"
+            className="text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white"
+          >
+            Templates
+          </Link>
         </nav>
       </header>
       {children}

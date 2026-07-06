@@ -34,11 +34,25 @@ export function SystemTemplateView({ template }: { template: TemplateDetail }) {
         </div>
       </div>
 
-      <div>
-        <span className="mb-1 block text-xs font-medium text-zinc-500">
-          Template body
-        </span>
-        <TemplatePreview content={template.content ?? ""} />
+      <div
+        className={
+          template.exampleOutput ? "grid gap-4 lg:grid-cols-2" : undefined
+        }
+      >
+        <div>
+          <span className="mb-1 block text-xs font-medium text-zinc-500">
+            Template body
+          </span>
+          <TemplatePreview content={template.content ?? ""} />
+        </div>
+        {template.exampleOutput ? (
+          <div>
+            <span className="mb-1 block text-xs font-medium text-zinc-500">
+              Example output
+            </span>
+            <TemplatePreview content={template.exampleOutput} />
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-end gap-x-6">
