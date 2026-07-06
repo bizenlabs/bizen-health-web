@@ -3,9 +3,11 @@ import { ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
 import { getPatient, type PatientSummary } from "@/lib/patients";
 import { detailToPatientSummary } from "@/lib/patient-display";
+import { getBranding } from "@/lib/organization";
 import { getTemplate } from "@/lib/templates";
 import { getTranscription } from "@/lib/transcriptions";
 import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "@/lib/transcription/languages";
+import type { OrgVarSource } from "@/lib/template-variables";
 import { DictationEditor } from "../_components/dictation-editor";
 
 // The unified dictation surface. Reached from the library, or with a `record`
@@ -76,6 +78,27 @@ export default async function DictationDetailPage({
     }
   }
 
+  // Organization branding fills {{org.*}} markers at seed time and the export
+  // letterhead. Best-effort — the editor still opens if branding can't be loaded.
+  let org: OrgVarSource | null = null;
+  let orgHasLogo = false;
+  try {
+    const branding = await getBranding();
+    org = {
+      name: branding.effectiveDisplayName || null,
+      address: branding.address,
+      phone: branding.phone,
+      email: branding.email,
+      website: branding.website,
+      tagline: branding.tagline,
+      registrationNo: branding.registrationNo,
+      taxId: branding.taxId,
+    };
+    orgHasLogo = branding.hasLogo;
+  } catch {
+    /* branding unavailable — org markers stay unresolved */
+  }
+
   return (
     <div className="flex w-full flex-1 flex-col">
       {/* The editor owns its own header (name, controls, timestamp) so the
@@ -101,6 +124,8 @@ export default async function DictationDetailPage({
           language={
             session.transcriptionLanguage ?? DEFAULT_TRANSCRIPTION_LANGUAGE
           }
+          org={org}
+          orgHasLogo={orgHasLogo}
         />
       </div>
     </div>

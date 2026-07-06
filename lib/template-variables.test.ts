@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PatientSummary } from "@/lib/patients";
 import {
   containsKnownVariable,
+  type OrgVarSource,
   type PatientVarSource,
   patientVarsFromSummary,
   resolveTemplateVariables,
@@ -19,8 +20,22 @@ const SUNITA: PatientVarSource = {
   phone: "+91 98765 43210",
 };
 
+const CLINIC: OrgVarSource = {
+  name: "Bizen Rural Health Centre",
+  address: "12 Station Road, Jaipur",
+  phone: "+91 141 222 3344",
+  email: "care@bizen.example",
+  website: "https://bizen.example",
+  tagline: "Care close to home",
+  registrationNo: "RJ-CLINIC-9981",
+  taxId: "08ABCDE1234F1Z5",
+};
+
 const resolve = (content: string, patient: PatientVarSource | null) =>
   resolveTemplateVariables(content, { patient, now: NOW });
+
+const resolveOrg = (content: string, org: OrgVarSource | null) =>
+  resolveTemplateVariables(content, { patient: null, org, now: NOW });
 
 describe("resolveTemplateVariables — known values", () => {
   it("fills patient name, age, sex, dob and id", () => {
@@ -85,6 +100,51 @@ describe("resolveTemplateVariables — linked patient, missing field is dropped"
     expect(
       resolve("Phone: {{patient.phone}}", { ...SUNITA, phone: null }),
     ).toBe("Phone:");
+  });
+});
+
+describe("resolveTemplateVariables — organization branding", () => {
+  it("fills every org.* field regardless of patient", () => {
+    expect(resolveOrg("Clinic: {{org.name}}", CLINIC)).toBe(
+      "Clinic: Bizen Rural Health Centre",
+    );
+    expect(resolveOrg("{{org.address}}", CLINIC)).toBe(
+      "12 Station Road, Jaipur",
+    );
+    expect(resolveOrg("Tel {{org.phone}}", CLINIC)).toBe(
+      "Tel +91 141 222 3344",
+    );
+    expect(resolveOrg("{{org.email}}", CLINIC)).toBe("care@bizen.example");
+    expect(resolveOrg("{{org.website}}", CLINIC)).toBe("https://bizen.example");
+    expect(resolveOrg("{{org.tagline}}", CLINIC)).toBe("Care close to home");
+    expect(resolveOrg("Reg {{org.registrationNo}}", CLINIC)).toBe(
+      "Reg RJ-CLINIC-9981",
+    );
+    expect(resolveOrg("GSTIN {{org.taxId}}", CLINIC)).toBe(
+      "GSTIN 08ABCDE1234F1Z5",
+    );
+  });
+
+  it("resolves org markers even with a patient present", () => {
+    expect(
+      resolveTemplateVariables("{{org.name}} — {{patient.name}}", {
+        patient: SUNITA,
+        org: CLINIC,
+        now: NOW,
+      }),
+    ).toBe("Bizen Rural Health Centre — Sunita Devi");
+  });
+
+  it("drops an org marker (and its leading space) when the field is empty", () => {
+    expect(resolveOrg("Tel: {{org.phone}}", { ...CLINIC, phone: null })).toBe(
+      "Tel:",
+    );
+  });
+
+  it("leaves org.* markers in place when no org source is passed", () => {
+    // The patient-change rewrite passes no org; markers already resolved at seed.
+    expect(resolve("{{org.name}}", SUNITA)).toBe("{{org.name}}");
+    expect(resolveOrg("{{org.name}}", null)).toBe("{{org.name}}");
   });
 });
 

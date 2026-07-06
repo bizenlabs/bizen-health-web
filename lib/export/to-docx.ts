@@ -5,10 +5,30 @@ import type { Block, InlineRun, ListItem } from "./blocks";
 // (.docx) Blob using the `docx` library. `docx` is imported dynamically so it
 // stays out of the main client bundle — export is a rare, on-demand action.
 
+/** A decoded logo ready for both renderers: a data URL for pdfmake, raw bytes
+ * for docx, plus the display size (already scaled to fit the letterhead box). */
+export type DocLogo = {
+  dataUrl: string;
+  data: Uint8Array;
+  type: "png" | "jpg";
+  width: number;
+  height: number;
+};
+
+/** Organization branding for a document letterhead: name, detail lines, logo. */
+export type DocOrg = {
+  name: string;
+  lines: string[];
+  logo?: DocLogo;
+};
+
 export type DocMeta = {
   title: string;
   // A preformatted line shown under the title (e.g. the started-at timestamp).
   subtitle?: string;
+  // When present, a branded letterhead (logo left, org details right, a rule)
+  // is rendered above the title.
+  org?: DocOrg;
 };
 
 const MONO = "Courier New";
@@ -30,6 +50,7 @@ export async function blocksToDocxBlob(
     LevelFormat,
     AlignmentType,
     BorderStyle,
+    ImageRun,
   } = await import("docx");
 
   // Each ordered list gets its own numbering reference so it restarts at its
@@ -256,9 +277,99 @@ export async function blocksToDocxBlob(
     return out;
   }
 
+  // --- letterhead -------------------------------------------------------
+  // Logo (left) + org name & detail lines (right), in a borderless 2-column
+  // table, closed by a thin rule. Rendered above the title when branding is set.
+  const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+  const NO_BORDERS = {
+    top: NO_BORDER,
+    bottom: NO_BORDER,
+    left: NO_BORDER,
+    right: NO_BORDER,
+    insideHorizontal: NO_BORDER,
+    insideVertical: NO_BORDER,
+  };
+
+  function letterhead(
+    org: DocOrg,
+  ): (InstanceType<typeof Table> | InstanceType<typeof Paragraph>)[] {
+    const details = [
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        spacing: { after: 0 },
+        children: [new TextRun({ text: org.name, bold: true, size: 26 })],
+      }),
+      ...org.lines.map(
+        (line) =>
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { after: 0 },
+            children: [new TextRun({ text: line, size: 18, color: "71717A" })],
+          }),
+      ),
+    ];
+
+    const logoCellChildren = org.logo
+      ? [
+          new Paragraph({
+            children: [
+              new ImageRun({
+                type: org.logo.type,
+                data: org.logo.data,
+                transformation: {
+                  width: org.logo.width,
+                  height: org.logo.height,
+                },
+              }),
+            ],
+          }),
+        ]
+      : [new Paragraph({})];
+
+    const table = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: NO_BORDERS,
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 35, type: WidthType.PERCENTAGE },
+              borders: NO_BORDERS,
+              children: logoCellChildren,
+            }),
+            new TableCell({
+              width: { size: 65, type: WidthType.PERCENTAGE },
+              borders: NO_BORDERS,
+              children: details,
+            }),
+          ],
+        }),
+      ],
+    });
+
+    // A thin rule under the letterhead, as an empty bottom-bordered paragraph.
+    const rule = new Paragraph({
+      spacing: { before: 60, after: 160 },
+      border: {
+        bottom: {
+          style: BorderStyle.SINGLE,
+          size: 6,
+          color: "D4D4D8",
+          space: 1,
+        },
+      },
+    });
+
+    return [table, rule];
+  }
+
   // --- document ---------------------------------------------------------
   const body: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] =
     [];
+
+  if (meta.org) {
+    body.push(...letterhead(meta.org));
+  }
 
   body.push(
     new Paragraph({

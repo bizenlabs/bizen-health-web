@@ -44,6 +44,30 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { key: "patient.id", token: "{{patient.id}}", label: "Patient ID / MRN" },
   { key: "patient.phone", token: "{{patient.phone}}", label: "Patient phone" },
   { key: "date.today", token: "{{date.today}}", label: "Today’s date" },
+  { key: "org.name", token: "{{org.name}}", label: "Organization name" },
+  {
+    key: "org.address",
+    token: "{{org.address}}",
+    label: "Organization address",
+  },
+  { key: "org.phone", token: "{{org.phone}}", label: "Organization phone" },
+  { key: "org.email", token: "{{org.email}}", label: "Organization email" },
+  {
+    key: "org.website",
+    token: "{{org.website}}",
+    label: "Organization website",
+  },
+  {
+    key: "org.tagline",
+    token: "{{org.tagline}}",
+    label: "Organization tagline",
+  },
+  {
+    key: "org.registrationNo",
+    token: "{{org.registrationNo}}",
+    label: "Registration / license no.",
+  },
+  { key: "org.taxId", token: "{{org.taxId}}", label: "GSTIN / tax ID" },
 ];
 
 const LABEL_BY_KEY = new Map(TEMPLATE_VARIABLES.map((v) => [v.key, v.label]));
@@ -81,6 +105,26 @@ export type PatientVarSource = {
   gender: Gender | null;
   identifier: string | null;
   phone: string | null;
+};
+
+/**
+ * The organization-branding fields the `org.*` variables need. `name` is the
+ * effective display name (the clinic's chosen name, falling back to its
+ * registered workspace name); every other field is optional.
+ *
+ * Unlike `patient.*`, org data is always available server-side, so `org.*`
+ * markers resolve unconditionally at seed time (like `date.today`) — a
+ * per-field empty value drops just that marker.
+ */
+export type OrgVarSource = {
+  name: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  tagline: string | null;
+  registrationNo: string | null;
+  taxId: string | null;
 };
 
 /** Build a variable source from a patient summary, or null if no patient. */
@@ -155,9 +199,33 @@ function toYmd(d: Date): string {
 function resolveValue(
   key: string,
   patient: PatientVarSource | null,
+  org: OrgVarSource | null,
   now: Date,
 ): string | null {
   if (key === "date.today") return formatYmd(toYmd(now));
+  if (key.startsWith("org.")) {
+    if (!org) return null;
+    switch (key) {
+      case "org.name":
+        return org.name;
+      case "org.address":
+        return org.address;
+      case "org.phone":
+        return org.phone;
+      case "org.email":
+        return org.email;
+      case "org.website":
+        return org.website;
+      case "org.tagline":
+        return org.tagline;
+      case "org.registrationNo":
+        return org.registrationNo;
+      case "org.taxId":
+        return org.taxId;
+      default:
+        return null;
+    }
+  }
   if (!patient) return null;
   switch (key) {
     case "patient.name":
@@ -182,21 +250,30 @@ function resolveValue(
  *  - known key with data        → its value;
  *  - known key, patient linked, no value → removed (with one leading space);
  *  - `patient.*` with no patient linked  → left in place (filled later);
+ *  - `org.*` with no org source passed   → left in place (filled later);
  *  - unknown key                → left untouched (an author's typo stays visible).
  *
  * `now` is injectable for deterministic tests.
  */
 export function resolveTemplateVariables(
   content: string,
-  ctx: { patient: PatientVarSource | null; now?: Date },
+  ctx: {
+    patient: PatientVarSource | null;
+    org?: OrgVarSource | null;
+    now?: Date;
+  },
 ): string {
   const now = ctx.now ?? new Date();
+  const org = ctx.org ?? null;
   return content.replace(VARIABLE_PATTERN, (match, rawKey: string) => {
     const key = rawKey.trim();
     if (!isKnownVariable(key)) return match;
     // No patient yet: keep patient markers so they can be filled once one is set.
     if (ctx.patient === null && key.startsWith("patient.")) return match;
-    const value = resolveValue(key, ctx.patient, now);
+    // No org source passed (e.g. the patient-change rewrite): keep org markers,
+    // which were already resolved against the org at seed time.
+    if (org === null && key.startsWith("org.")) return match;
+    const value = resolveValue(key, ctx.patient, org, now);
     if (value === null) return ""; // missing → drop the marker (and its space)
     // Preserve a leading space the pattern may have swallowed.
     return match.startsWith(" ") ? ` ${value}` : value;

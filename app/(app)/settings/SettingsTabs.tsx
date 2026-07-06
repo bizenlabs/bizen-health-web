@@ -9,6 +9,7 @@ import clsx from "clsx";
 // only rendered into the bar when `isAdmin`.
 const TABS = [
   { href: "/settings", label: "General", exact: true, adminOnly: false },
+  { href: "/settings/organization", label: "Organization", adminOnly: true },
   {
     href: "/settings/reference-data",
     label: "Reference data",

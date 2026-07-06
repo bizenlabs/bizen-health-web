@@ -5,7 +5,7 @@ import type { DocMeta } from "./to-docx";
 export type ExportFormat = "pdf" | "docx";
 
 export { isEmptyDocument, documentToBlocks } from "./blocks";
-export type { DocMeta } from "./to-docx";
+export type { DocLogo, DocMeta, DocOrg } from "./to-docx";
 
 const EXT: Record<ExportFormat, string> = { pdf: "pdf", docx: "docx" };
 

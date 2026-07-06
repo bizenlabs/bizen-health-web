@@ -1,6 +1,6 @@
 import type { Content, Decoration } from "pdfmake/interfaces";
 import type { Block, InlineRun, ListItem } from "./blocks";
-import type { DocMeta } from "./to-docx";
+import type { DocMeta, DocOrg } from "./to-docx";
 
 // Renders the format-agnostic block model (see `blocks.ts`) to a PDF Blob
 // using pdfmake. Both pdfmake and its bundled font VFS are imported
@@ -128,6 +128,54 @@ function renderBlock(block: Block): Content[] {
   }
 }
 
+// A branded letterhead: logo (left) + org name & detail lines (right-aligned),
+// closed by a thin rule. Rendered above the title when branding is present.
+function letterhead(org: DocOrg): Content[] {
+  const details: Content = {
+    stack: [
+      { text: org.name, bold: true, fontSize: 13 },
+      ...org.lines.map((line) => ({
+        text: line,
+        fontSize: 9,
+        color: "#52525b",
+      })),
+    ],
+    alignment: "right",
+  };
+
+  const columns: Content = {
+    columns: org.logo
+      ? [
+          {
+            image: org.logo.dataUrl,
+            width: org.logo.width,
+            height: org.logo.height,
+          },
+          details,
+        ]
+      : [details],
+    columnGap: 12,
+    margin: [0, 0, 0, 8],
+  };
+
+  const rule: Content = {
+    canvas: [
+      {
+        type: "line",
+        x1: 0,
+        y1: 0,
+        x2: 515,
+        y2: 0,
+        lineWidth: 0.75,
+        lineColor: "#d4d4d8",
+      },
+    ],
+    margin: [0, 0, 0, 12],
+  };
+
+  return [columns, rule];
+}
+
 export async function blocksToPdfBlob(
   blocks: Block[],
   meta: DocMeta,
@@ -147,6 +195,7 @@ export async function blocksToPdfBlob(
   pdfMake.addVirtualFileSystem(vfs);
 
   const content: Content[] = [
+    ...(meta.org ? letterhead(meta.org) : []),
     { text: meta.title, style: "title" },
     ...(meta.subtitle
       ? [{ text: meta.subtitle, style: "subtitle" } as Content]

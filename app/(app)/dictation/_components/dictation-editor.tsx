@@ -64,6 +64,7 @@ import { patientMeta } from "@/lib/patient-display";
 import type { PatientSummary } from "@/lib/patients";
 import {
   containsKnownVariable,
+  type OrgVarSource,
   type PatientVarSource,
   patientVarsFromSummary,
   resolveTemplateVariables,
@@ -78,7 +79,7 @@ import {
   useAudioDevices,
 } from "@/lib/transcription/use-audio-devices";
 import { DictationDeleteButton } from "./dictation-delete-button";
-import { DictationExportMenu } from "./dictation-export-menu";
+import { DictationExportMenu, type ExportOrg } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
 import { DictationCaret, dictationCaretKey } from "./dictation-caret";
 import { DictationVariableGhost } from "./dictation-variable-ghost";
@@ -389,6 +390,42 @@ function moveToCell(
   return true;
 }
 
+// Assemble the document-letterhead branding from the org variable source: the
+// name, then address lines, a phone·email contact line, website, tagline and a
+// registration/tax line — the same detail block used on a clinic letterhead.
+// Returns null when there's nothing to show, so exports stay unbranded.
+function buildExportOrg(
+  org: OrgVarSource | null,
+  hasLogo: boolean,
+): ExportOrg | null {
+  if (!org) return null;
+  const lines: string[] = [];
+  if (org.address) {
+    lines.push(
+      ...org.address
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean),
+    );
+  }
+  const contact = [org.phone, org.email].filter(Boolean).join(" · ");
+  if (contact) lines.push(contact);
+  if (org.website) lines.push(org.website);
+  if (org.tagline) lines.push(org.tagline);
+  const ids = [
+    org.registrationNo && `Reg: ${org.registrationNo}`,
+    org.taxId && `GSTIN: ${org.taxId}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (ids) lines.push(ids);
+
+  const name = org.name?.trim();
+  // Nothing to brand with — no name, no detail lines, no logo.
+  if (!name && lines.length === 0 && !hasLogo) return null;
+  return { name: name || "", lines, hasLogo };
+}
+
 export function DictationEditor({
   transcriptionId,
   title,
@@ -404,6 +441,8 @@ export function DictationEditor({
   voided,
   autoRecord,
   language,
+  org,
+  orgHasLogo,
 }: {
   transcriptionId: string;
   // The dictation's name and a preformatted started-at timestamp — rendered in
@@ -429,8 +468,15 @@ export function DictationEditor({
   autoRecord: boolean;
   // The tenant's transcription language/accent, resolved server-side.
   language: string;
+  // The tenant's organization branding, resolved server-side — fills `{{org.*}}`
+  // markers at seed time. Null only if branding couldn't be loaded.
+  org: OrgVarSource | null;
+  // Whether the tenant has uploaded a logo — drives the export letterhead.
+  orgHasLogo: boolean;
 }) {
   const router = useRouter();
+  // Branding for the export letterhead — stable across the editor's lifetime.
+  const exportOrg = buildExportOrg(org, orgHasLogo);
   const {
     state,
     error,
@@ -765,6 +811,7 @@ export function DictationEditor({
     // one is linked; date.today still resolves.
     const varCtx = {
       patient: patientVarsFromSummary(patient),
+      org,
       now: new Date(),
     };
     hadVariablesRef.current =
@@ -853,6 +900,7 @@ export function DictationEditor({
     // Read once for seed-time variable fill; the initRef guard makes re-runs
     // (e.g. on a later patient relink) a no-op.
     patient,
+    org,
   ]);
 
   // --- Voice commands ---------------------------------------------------
@@ -1721,6 +1769,7 @@ export function DictationEditor({
             editor={editor}
             documentTitle={title ?? templateName ?? "Free-form dictation"}
             documentSubtitle={startedAtLabel}
+            org={exportOrg}
             saveStatus={saveStatus}
             lastSavedAt={lastSavedAt}
             now={now}
@@ -2168,6 +2217,7 @@ function Toolbar({
   editor,
   documentTitle,
   documentSubtitle,
+  org,
   saveStatus,
   lastSavedAt,
   now,
@@ -2175,6 +2225,7 @@ function Toolbar({
   editor: Editor;
   documentTitle: string;
   documentSubtitle?: string;
+  org: ExportOrg | null;
   saveStatus: SaveStatus;
   lastSavedAt: number | null;
   now: number;
@@ -2351,6 +2402,7 @@ function Toolbar({
             editor={editor}
             title={documentTitle}
             subtitle={documentSubtitle}
+            org={org}
             disabled={editor.isEmpty}
           />
         </div>
