@@ -18,7 +18,6 @@ import {
 import { ErrorMessage, Field, Label } from "@/components/catalyst/fieldset";
 import { Input } from "@/components/catalyst/input";
 import { Select } from "@/components/catalyst/select";
-import { Textarea } from "@/components/catalyst/textarea";
 import { CATEGORY_LABEL, TEMPLATE_CATEGORIES } from "@/lib/template-categories";
 import { TEMPLATE_VARIABLES } from "@/lib/template-variables";
 import type { TemplateDetail, TemplateVersion } from "@/lib/templates";
@@ -27,6 +26,7 @@ import {
   restoreTemplateVersionAction,
   updateTemplateAction,
 } from "../actions";
+import { TemplateBodyEditor } from "./template-body-editor";
 import {
   TEMPLATE_FORM_INITIAL,
   type TemplateFormState,
@@ -179,15 +179,15 @@ export function TemplateEditor({
                 </Dropdown>
               </div>
               {/* Controlled so the preview renders live; `name` keeps it part
-                  of the form submission. Fixed height to match the preview
-                  pane — the Catalyst textarea fills its wrapper. */}
-              <Textarea
-                ref={bodyRef}
+                  of the form submission. The body editor adds a line-number
+                  ruler and "go to line X" navigation (input / ⌘G / ruler click
+                  / voice) around the fixed-height textarea. */}
+              <TemplateBodyEditor
+                textareaRef={bodyRef}
                 name="content"
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                resizable={false}
-                className="h-[34rem] font-mono"
+                onChange={setContent}
+                invalid={!!state.fieldErrors.content}
               />
             </div>
             <div>
