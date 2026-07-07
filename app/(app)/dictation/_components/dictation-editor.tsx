@@ -1787,7 +1787,11 @@ export function DictationEditor({
         {editor ? (
           <>
             <div className={clsx(showTabs && activeTab !== "note" && "hidden")}>
-              <EditorLineRuler editor={editor}>
+              <EditorLineRuler
+                editor={editor}
+                editable={phase === "editing" || paused}
+                allowVoice={phase === "editing"}
+              >
                 <EditorContent editor={editor} />
               </EditorLineRuler>
             </div>
