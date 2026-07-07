@@ -4,6 +4,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
   useCallback,
+  useEffect,
   useRef,
   useState,
 } from "react";
@@ -54,6 +55,25 @@ export function TemplateBodyEditor({
     const ta = textareaRef.current;
     if (ta && gutterRef.current) gutterRef.current.scrollTop = ta.scrollTop;
   }, [textareaRef]);
+
+  // The ruler is overflow-hidden, so a mouse wheel over the number strip
+  // scrolls nothing on its own (and would otherwise scroll the page). Forward
+  // the wheel delta to the textarea so the gutter scrolls the editor just like
+  // hovering the text does. Attached as a native, non-passive listener because
+  // React's synthetic onWheel is passive and can't preventDefault the page.
+  useEffect(() => {
+    const gutter = gutterRef.current;
+    if (!gutter) return;
+    const onWheel = (e: WheelEvent) => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      e.preventDefault();
+      ta.scrollTop += e.deltaY;
+      syncScroll();
+    };
+    gutter.addEventListener("wheel", onWheel, { passive: false });
+    return () => gutter.removeEventListener("wheel", onWheel);
+  }, [textareaRef, syncScroll]);
 
   // Recompute the caret's line whenever the selection might have moved.
   const updateCurrentLine = useCallback(() => {
