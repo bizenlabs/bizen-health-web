@@ -83,6 +83,7 @@ import { DictationExportMenu, type ExportOrg } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
 import { DictationCaret, dictationCaretKey } from "./dictation-caret";
 import { DictationVariableGhost } from "./dictation-variable-ghost";
+import { EditorLineRuler } from "./editor-line-ruler";
 import { EmptySectionDimmer } from "./empty-section-dimmer";
 import {
   applyTableCellPlaceholders,
@@ -1786,7 +1787,9 @@ export function DictationEditor({
         {editor ? (
           <>
             <div className={clsx(showTabs && activeTab !== "note" && "hidden")}>
-              <EditorContent editor={editor} />
+              <EditorLineRuler editor={editor}>
+                <EditorContent editor={editor} />
+              </EditorLineRuler>
             </div>
             {showTabs && activeTab === "transcript" ? (
               <TranscriptPane text={transcriptText} />
