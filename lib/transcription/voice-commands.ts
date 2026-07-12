@@ -27,9 +27,10 @@ export type VoiceCommand =
   | { kind: "paragraph" }
   | { kind: "nextSection" }
   | { kind: "prevSection" }
-  // Moves the dictation point to the next line within the section — unlike
+  // Move the dictation point a line up/down within the section — unlike
   // "new line" (an inline Tier-A command), which *inserts* a line break.
   | { kind: "nextLine" }
+  | { kind: "prevLine" }
   | { kind: "gotoSection"; target: string; raw: string }
   | { kind: "scratchThat" }
   | { kind: "undo" }
@@ -83,6 +84,11 @@ const WHOLE_UTTERANCE: Array<{
   {
     pattern: /^(?:next line|go to (?:the )?next line|down a line)$/i,
     command: () => ({ kind: "nextLine" }),
+  },
+  {
+    pattern:
+      /^(?:previous line|prior line|go to (?:the )?previous line|up a line|back a line)$/i,
+    command: () => ({ kind: "prevLine" }),
   },
   {
     pattern: /^(?:go|jump|navigate|skip) to (.{1,40})$/i,

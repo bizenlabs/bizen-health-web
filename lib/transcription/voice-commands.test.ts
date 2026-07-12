@@ -87,6 +87,14 @@ describe("parseUtterance — true positives (whole-utterance commands)", () => {
     expect(cmds(parseUtterance("down a line"))).toEqual(["nextLine"]);
   });
 
+  it("fires prevLine on its variants", () => {
+    expect(cmds(parseUtterance("previous line"))).toEqual(["prevLine"]);
+    expect(cmds(parseUtterance("prior line"))).toEqual(["prevLine"]);
+    expect(cmds(parseUtterance("go to previous line"))).toEqual(["prevLine"]);
+    expect(cmds(parseUtterance("up a line"))).toEqual(["prevLine"]);
+    expect(cmds(parseUtterance("back a line"))).toEqual(["prevLine"]);
+  });
+
   it("keeps 'next line' (move) distinct from 'new line' (insert)", () => {
     expect(cmds(parseUtterance("next line"))).toEqual(["nextLine"]);
     expect(cmds(parseUtterance("new line"))).toEqual(["newline"]);
@@ -234,6 +242,7 @@ describe("parseUtterance — every command survives a trailing period / merge", 
     { phrase: "next section", kind: "nextSection" },
     { phrase: "previous section", kind: "prevSection" },
     { phrase: "next line", kind: "nextLine" },
+    { phrase: "previous line", kind: "prevLine" },
     { phrase: "go to assessment", kind: "gotoSection" },
     { phrase: "scratch that", kind: "scratchThat" },
     { phrase: "undo", kind: "undo" },

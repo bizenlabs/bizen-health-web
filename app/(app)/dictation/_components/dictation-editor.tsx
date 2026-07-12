@@ -339,12 +339,17 @@ function findPrevSectionPos(editor: Editor, pos: number): number | null {
   return prev >= 0 ? sectionEndPos(editor, prev, hs) : null;
 }
 
-/** Where "next line" lands: the end of the textblock after the one `pos` sits
- *  in, so dictation appends to that line's existing text. Lines are textblocks
- *  — exactly what "new line" (splitBlock) creates — and a heading stops the
- *  walk: crossing a section boundary is "next section"'s job. Null when the
- *  current line is the section's last. */
-function findNextLinePos(editor: Editor, pos: number): number | null {
+/** Where "next line" / "previous line" land: the end of the textblock
+ *  `delta` lines from the one `pos` sits in, so dictation appends to that
+ *  line's existing text. Lines are textblocks — exactly what "new line"
+ *  (splitBlock) creates — and a heading stops the walk: crossing a section
+ *  boundary is "next/previous section"'s job. Null when there is no such line
+ *  in the section. */
+function findLinePos(
+  editor: Editor,
+  pos: number,
+  delta: 1 | -1,
+): number | null {
   const blocks: { offset: number; end: number; heading: boolean }[] = [];
   editor.state.doc.descendants((node, offset) => {
     if (!node.isTextblock) return true;
@@ -356,14 +361,14 @@ function findNextLinePos(editor: Editor, pos: number): number | null {
     return false; // textblocks contain only inline content
   });
   // The current line is the last block starting before `pos` (same convention
-  // as currentSectionIndex); the next block down is where the command lands.
+  // as currentSectionIndex); the block `delta` away is where the command lands.
   let idx = -1;
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i].offset < pos) idx = i;
     else break;
   }
-  const next = blocks[idx + 1];
-  return next && !next.heading ? next.end : null;
+  const target = blocks[idx + delta];
+  return target && !target.heading ? target.end : null;
 }
 
 /** Canonical form for matching a spoken section name to a heading. */
@@ -1059,14 +1064,21 @@ export function DictationEditor({
           }
           break;
         }
-        case "nextLine": {
-          const pos = findNextLinePos(editor, insertPosRef.current);
+        case "nextLine":
+        case "prevLine": {
+          const down = command.kind === "nextLine";
+          const pos = findLinePos(editor, insertPosRef.current, down ? 1 : -1);
           if (pos !== null) {
             insertPosRef.current = pos;
             lastInsertRangeRef.current = null;
-            flashCommand("Next line");
+            flashCommand(down ? "Next line" : "Previous line");
           } else {
-            flashCommand("No next line in this section", "warn");
+            flashCommand(
+              down
+                ? "No next line in this section"
+                : "No previous line in this section",
+              "warn",
+            );
           }
           break;
         }
@@ -1994,6 +2006,7 @@ const COMMAND_REFERENCE: { group: string; phrases: string[] }[] = [
     group: "Navigation",
     phrases: [
       "next line",
+      "previous line",
       "next section",
       "previous section",
       "go to <section>",
