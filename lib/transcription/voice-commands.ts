@@ -1,5 +1,6 @@
 // Spoken voice commands for dictation. A clinician can say "new line", "new
-// paragraph", "next section", "go to assessment", "scratch that", or "undo" and
+// paragraph", "next line", "next section", "go to assessment", "scratch that",
+// or "undo" and
 // have it become a structure/navigation/editing action instead of literal text.
 //
 // This module is the *pure* parser: it turns one finalised Deepgram utterance
@@ -26,6 +27,9 @@ export type VoiceCommand =
   | { kind: "paragraph" }
   | { kind: "nextSection" }
   | { kind: "prevSection" }
+  // Moves the dictation point to the next line within the section — unlike
+  // "new line" (an inline Tier-A command), which *inserts* a line break.
+  | { kind: "nextLine" }
   | { kind: "gotoSection"; target: string; raw: string }
   | { kind: "scratchThat" }
   | { kind: "undo" }
@@ -70,6 +74,15 @@ const WHOLE_UTTERANCE: Array<{
   {
     pattern: /^(?:previous section|prior section|go back a section)$/i,
     command: () => ({ kind: "prevSection" }),
+  },
+  // Whole-utterance only, and listed BEFORE the "go to <target>" pattern so
+  // "go to next line" resolves here rather than as a gotoSection whose target
+  // ("next line") would never match a heading and fall back to literal text.
+  // "next line" mid-sentence stays prose — "next line of treatment" is common
+  // clinical phrasing.
+  {
+    pattern: /^(?:next line|go to (?:the )?next line|down a line)$/i,
+    command: () => ({ kind: "nextLine" }),
   },
   {
     pattern: /^(?:go|jump|navigate|skip) to (.{1,40})$/i,

@@ -39,6 +39,11 @@ describe("parseUtterance — false positives (must NOT fire)", () => {
     const ops = parseUtterance("there is a new patient in line two");
     expect(cmds(ops)).toEqual([]);
   });
+
+  it("does not fire 'next line' inside clinical prose", () => {
+    const ops = parseUtterance("the next line of treatment is chemotherapy");
+    expect(cmds(ops)).toEqual([]);
+  });
 });
 
 describe("parseUtterance — true positives (whole-utterance commands)", () => {
@@ -73,6 +78,18 @@ describe("parseUtterance — true positives (whole-utterance commands)", () => {
       target: "assessment",
       raw: "go to assessment",
     });
+  });
+
+  it("fires nextLine on its variants", () => {
+    expect(cmds(parseUtterance("next line"))).toEqual(["nextLine"]);
+    expect(cmds(parseUtterance("go to next line"))).toEqual(["nextLine"]);
+    expect(cmds(parseUtterance("go to the next line"))).toEqual(["nextLine"]);
+    expect(cmds(parseUtterance("down a line"))).toEqual(["nextLine"]);
+  });
+
+  it("keeps 'next line' (move) distinct from 'new line' (insert)", () => {
+    expect(cmds(parseUtterance("next line"))).toEqual(["nextLine"]);
+    expect(cmds(parseUtterance("new line"))).toEqual(["newline"]);
   });
 
   it("fires undo", () => {
@@ -216,6 +233,7 @@ describe("parseUtterance — every command survives a trailing period / merge", 
     { phrase: "new paragraph", kind: "paragraph" },
     { phrase: "next section", kind: "nextSection" },
     { phrase: "previous section", kind: "prevSection" },
+    { phrase: "next line", kind: "nextLine" },
     { phrase: "go to assessment", kind: "gotoSection" },
     { phrase: "scratch that", kind: "scratchThat" },
     { phrase: "undo", kind: "undo" },

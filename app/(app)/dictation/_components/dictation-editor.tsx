@@ -339,6 +339,33 @@ function findPrevSectionPos(editor: Editor, pos: number): number | null {
   return prev >= 0 ? sectionEndPos(editor, prev, hs) : null;
 }
 
+/** Where "next line" lands: the end of the textblock after the one `pos` sits
+ *  in, so dictation appends to that line's existing text. Lines are textblocks
+ *  — exactly what "new line" (splitBlock) creates — and a heading stops the
+ *  walk: crossing a section boundary is "next section"'s job. Null when the
+ *  current line is the section's last. */
+function findNextLinePos(editor: Editor, pos: number): number | null {
+  const blocks: { offset: number; end: number; heading: boolean }[] = [];
+  editor.state.doc.descendants((node, offset) => {
+    if (!node.isTextblock) return true;
+    blocks.push({
+      offset,
+      end: offset + node.nodeSize - 1,
+      heading: node.type.name === "heading",
+    });
+    return false; // textblocks contain only inline content
+  });
+  // The current line is the last block starting before `pos` (same convention
+  // as currentSectionIndex); the next block down is where the command lands.
+  let idx = -1;
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].offset < pos) idx = i;
+    else break;
+  }
+  const next = blocks[idx + 1];
+  return next && !next.heading ? next.end : null;
+}
+
 /** Canonical form for matching a spoken section name to a heading. */
 function canonLabel(text: string): string {
   return normalizeLabel(text)
@@ -1029,6 +1056,17 @@ export function DictationEditor({
             flashCommand(label ? `→ ${label}` : "Previous section");
           } else {
             flashCommand("Already at first section", "warn");
+          }
+          break;
+        }
+        case "nextLine": {
+          const pos = findNextLinePos(editor, insertPosRef.current);
+          if (pos !== null) {
+            insertPosRef.current = pos;
+            lastInsertRangeRef.current = null;
+            flashCommand("Next line");
+          } else {
+            flashCommand("No next line in this section", "warn");
           }
           break;
         }
@@ -1954,7 +1992,12 @@ const COMMAND_REFERENCE: { group: string; phrases: string[] }[] = [
   { group: "Structure", phrases: ["new line", "new paragraph"] },
   {
     group: "Navigation",
-    phrases: ["next section", "previous section", "go to <section>"],
+    phrases: [
+      "next line",
+      "next section",
+      "previous section",
+      "go to <section>",
+    ],
   },
   { group: "Editing", phrases: ["scratch that", "undo"] },
   {
