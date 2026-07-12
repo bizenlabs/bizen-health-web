@@ -277,6 +277,30 @@ function currentSectionIndex(headings: SectionHeading[], pos: number): number {
   return idx;
 }
 
+/** First empty textblock in [from, until) — at any depth, so table cells
+ *  count — else the first textblock, else null. The insert-landing rule shared
+ *  by section navigation and "go to table". */
+function firstTextblockPos(
+  editor: Editor,
+  from: number,
+  until: number,
+): number | null {
+  let firstAny: number | null = null;
+  let firstEmpty: number | null = null;
+  editor.state.doc.nodesBetween(from, until, (node, nodePos) => {
+    if (firstEmpty !== null) return false;
+    // A container straddling `from` — descend, but don't count it.
+    if (nodePos < from) return true;
+    if (node.isTextblock) {
+      if (firstAny === null) firstAny = nodePos + 1;
+      if (node.content.size === 0) firstEmpty = nodePos + 1;
+      return false;
+    }
+    return true;
+  });
+  return firstEmpty ?? firstAny;
+}
+
 /** Where dictation should land within a section: its first empty block, else
  *  its first block, else just inside the heading line. */
 function sectionInsertPos(
@@ -287,17 +311,9 @@ function sectionInsertPos(
   const h = headings[index];
   const from = h.offset + h.nodeSize;
   const until = headings[index + 1]?.offset ?? editor.state.doc.content.size;
-  let firstAny: number | null = null;
-  let firstEmpty: number | null = null;
-  editor.state.doc.forEach((node, offset) => {
-    if (offset < from || offset >= until) return;
-    if (node.isTextblock) {
-      if (firstAny === null) firstAny = offset + 1;
-      if (firstEmpty === null && node.content.size === 0)
-        firstEmpty = offset + 1;
-    }
-  });
-  const pos = firstEmpty ?? firstAny;
+  // Textblocks at any depth, so a section whose content is a table (e.g. the
+  // prescription scaffold) lands in its first empty cell, not at the heading.
+  const pos = firstTextblockPos(editor, from, until);
   if (pos !== null) return pos;
   // No block between this heading and the next — land at the heading's end.
   const max = Math.max(1, editor.state.doc.content.size - 1);
@@ -418,6 +434,22 @@ function findSectionByName(editor: Editor, target: string): number | null {
 // goToNextCell uses internally — and drops a text selection into it. The
 // dictation point is then resynced from that selection by the caller.
 //
+/** Where "go to table" lands: the first empty cell (else first cell) of the
+ *  next table at or after `pos`. A table the point is already inside doesn't
+ *  count as "next", so repeating the command steps through a multi-table note;
+ *  past the last one it wraps to the first. Null when the note has no table. */
+function findTablePos(editor: Editor, pos: number): number | null {
+  const tables: { start: number; end: number }[] = [];
+  editor.state.doc.descendants((node, nodePos) => {
+    if (node.type.name !== "table") return true;
+    tables.push({ start: nodePos, end: nodePos + node.nodeSize });
+    return false; // tables don't nest
+  });
+  if (tables.length === 0) return null;
+  const target = tables.find((t) => t.start >= pos) ?? tables[0];
+  return firstTextblockPos(editor, target.start, target.end);
+}
+
 // Moves `rowDelta` rows from the cell the current selection sits in, keeping the
 // same column unless `targetCol` is given ("next row" pins column 0). Returns
 // false when the selection isn't in a table or the target row is out of bounds.
@@ -1114,10 +1146,22 @@ export function DictationEditor({
           flashCommand("Undid", "warn");
           break;
         }
-        // --- Table commands. Each seeds the selection at the dictation point,
+        // --- Table commands. "go to table" is the entry point — it works from
+        // anywhere; the rest seed the selection at the dictation point,
         // runs a prosemirror-tables action, then resyncs insertPos from the
         // resulting selection. The editor is read-only while recording, so the
         // selection has to be placed before isActive("table") is meaningful.
+        case "gotoTable": {
+          const pos = findTablePos(editor, insertPosRef.current);
+          if (pos !== null) {
+            insertPosRef.current = pos;
+            lastInsertRangeRef.current = null;
+            flashCommand("→ Table");
+          } else {
+            flashCommand("No table in this note", "warn");
+          }
+          break;
+        }
         case "nextCell":
         case "prevCell": {
           const dir = command.kind === "nextCell" ? 1 : -1;
@@ -2016,6 +2060,7 @@ const COMMAND_REFERENCE: { group: string; phrases: string[] }[] = [
   {
     group: "Table",
     phrases: [
+      "go to table",
       "next cell",
       "previous cell",
       "next row",

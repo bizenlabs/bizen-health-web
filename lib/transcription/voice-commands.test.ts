@@ -141,6 +141,21 @@ describe("parseUtterance — inline whitespace commands", () => {
 });
 
 describe("parseUtterance — table navigation", () => {
+  it("fires gotoTable on its variants", () => {
+    expect(cmds(parseUtterance("go to table"))).toEqual(["gotoTable"]);
+    expect(cmds(parseUtterance("go to the table"))).toEqual(["gotoTable"]);
+    expect(cmds(parseUtterance("jump to table"))).toEqual(["gotoTable"]);
+    expect(cmds(parseUtterance("enter the table"))).toEqual(["gotoTable"]);
+    expect(cmds(parseUtterance("next table"))).toEqual(["gotoTable"]);
+    expect(cmds(parseUtterance("go to next table"))).toEqual(["gotoTable"]);
+  });
+
+  it("does not fire gotoTable inside prose", () => {
+    expect(
+      cmds(parseUtterance("the next table shows the dosing schedule")),
+    ).toEqual([]);
+  });
+
   it("fires nextCell on its phrases", () => {
     expect(cmds(parseUtterance("next cell"))).toEqual(["nextCell"]);
     expect(cmds(parseUtterance("next column"))).toEqual(["nextCell"]);
@@ -246,6 +261,7 @@ describe("parseUtterance — every command survives a trailing period / merge", 
     { phrase: "go to assessment", kind: "gotoSection" },
     { phrase: "scratch that", kind: "scratchThat" },
     { phrase: "undo", kind: "undo" },
+    { phrase: "go to table", kind: "gotoTable" },
     { phrase: "next cell", kind: "nextCell" },
     { phrase: "previous cell", kind: "prevCell" },
     { phrase: "cell up", kind: "cellUp" },

@@ -37,6 +37,10 @@ export type VoiceCommand =
   // Table navigation/editing (Tier B — whole-utterance only). The editor maps
   // these onto prosemirror-tables actions and no-ops (with a warning flash)
   // when the dictation point isn't inside a table.
+  // Entry point: moves the dictation point into the next table in the note
+  // (its first empty cell), so the cell/row commands below have somewhere to
+  // act. The others no-op until the point is inside a table.
+  | { kind: "gotoTable" }
   | { kind: "nextCell" }
   | { kind: "prevCell" }
   | { kind: "cellUp" }
@@ -89,6 +93,14 @@ const WHOLE_UTTERANCE: Array<{
     pattern:
       /^(?:previous line|prior line|go to (?:the )?previous line|up a line|back a line)$/i,
     command: () => ({ kind: "prevLine" }),
+  },
+  // Also ahead of "go to <target>" so "go to (the) table" is table entry, not
+  // a section lookup. "next table" reads naturally because the editor's
+  // forward-search-and-wrap picks the following table when already inside one.
+  {
+    pattern:
+      /^(?:(?:go|jump) to (?:the )?(?:next )?table|enter (?:the )?table|next table)$/i,
+    command: () => ({ kind: "gotoTable" }),
   },
   {
     pattern: /^(?:go|jump|navigate|skip) to (.{1,40})$/i,
