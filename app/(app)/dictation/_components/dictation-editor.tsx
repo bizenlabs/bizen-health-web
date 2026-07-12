@@ -304,6 +304,27 @@ function sectionInsertPos(
   return Math.min(h.offset + h.nodeSize - 1, max);
 }
 
+/** Where "previous section" should land: the end of the section's last block,
+ *  so returning to a section appends to what was already dictated there. */
+function sectionEndPos(
+  editor: Editor,
+  index: number,
+  headings: SectionHeading[],
+): number {
+  const h = headings[index];
+  const from = h.offset + h.nodeSize;
+  const until = headings[index + 1]?.offset ?? editor.state.doc.content.size;
+  let end: number | null = null;
+  editor.state.doc.nodesBetween(from, until, (node, nodePos) => {
+    if (node.isTextblock) end = nodePos + node.nodeSize - 1;
+    return true;
+  });
+  if (end !== null) return end;
+  // No block between this heading and the next — land at the heading's end.
+  const max = Math.max(1, editor.state.doc.content.size - 1);
+  return Math.min(h.offset + h.nodeSize - 1, max);
+}
+
 function findNextSectionPos(editor: Editor, pos: number): number | null {
   const hs = sectionHeadings(editor);
   if (!hs.length) return null;
@@ -315,7 +336,7 @@ function findPrevSectionPos(editor: Editor, pos: number): number | null {
   const hs = sectionHeadings(editor);
   if (!hs.length) return null;
   const prev = currentSectionIndex(hs, pos) - 1;
-  return prev >= 0 ? sectionInsertPos(editor, prev, hs) : null;
+  return prev >= 0 ? sectionEndPos(editor, prev, hs) : null;
 }
 
 /** Canonical form for matching a spoken section name to a heading. */
