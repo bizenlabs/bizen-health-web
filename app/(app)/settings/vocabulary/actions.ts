@@ -12,9 +12,11 @@ import {
   updateDictionaryEntry,
 } from "@/lib/dictionary";
 
-const LIST_PATH = "/settings/dictionary";
+const LIST_PATH = "/settings/vocabulary";
 
-export type DictionaryActionResult = { ok: true } | { ok: false; error: string };
+export type DictionaryActionResult =
+  | { ok: true }
+  | { ok: false; error: string };
 
 function str(formData: FormData, key: string): string {
   return (formData.get(key) ?? "").toString().trim();

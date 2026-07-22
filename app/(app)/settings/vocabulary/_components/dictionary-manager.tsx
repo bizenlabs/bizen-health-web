@@ -48,7 +48,7 @@ export function DictionaryManager({ entries }: { entries: DictionaryEntry[] }) {
     <div className="mx-auto w-full max-w-3xl space-y-8 py-2">
       <header>
         <h1 className="text-lg font-semibold text-zinc-950 dark:text-white">
-          Dictionary
+          Vocabulary
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Add words your clinic uses so transcription spells them correctly —

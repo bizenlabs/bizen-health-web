@@ -4,7 +4,7 @@ import { listOrgInvitations } from "@/lib/workos";
 import { InviteForm } from "./InviteForm";
 import { TeamRoster, type PendingInvitation } from "./TeamRoster";
 
-export default async function TeamPage() {
+export default async function StaffPage() {
   const session = await requireRole("tenant_admin");
   if (!session.organizationId) {
     throw new Error("No active organization");
@@ -29,15 +29,15 @@ export default async function TeamPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Team</h1>
+      <h1 className="text-2xl font-semibold">Staff</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Manage who can access {session.tenantSlug ?? "this workspace"}.
       </p>
 
       {session.orgType === "individual" ? (
         <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          You&apos;re set up as an individual account. Inviting your first
-          teammate will convert this to a team account.
+          You&apos;re set up as an individual account. Inviting your first staff
+          member will convert this to a clinic account.
         </div>
       ) : null}
 
@@ -49,7 +49,7 @@ export default async function TeamPage() {
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
-          Invite a teammate
+          Invite a staff member
         </h2>
         <InviteForm />
       </section>

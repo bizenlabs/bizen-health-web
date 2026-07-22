@@ -5,7 +5,7 @@
 > **WorkOS Dashboard → Authentication → Emails → "Email verification"** template.
 >
 > **Send flow (for reference):**
-> `settings/team` → `lib/users.ts:inviteTenantUser()` → backend `TenantUsersAdminController`
+> `settings/staff` → `lib/users.ts:inviteTenantUser()` → backend `TenantUsersAdminController`
 > → `WorkOsRestMemberships` → WorkOS `/user_management/invitations` → WorkOS renders & sends.
 
 ## Notes before pasting

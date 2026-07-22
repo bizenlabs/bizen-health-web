@@ -41,7 +41,7 @@ export function GeneralSection({
           {orgType ?? "—"}
         </DescriptionDetails>
 
-        <DescriptionTerm>Organization ID</DescriptionTerm>
+        <DescriptionTerm>Practice ID</DescriptionTerm>
         <DescriptionDetails>
           <span className="font-mono text-xs">{organizationId}</span>
         </DescriptionDetails>

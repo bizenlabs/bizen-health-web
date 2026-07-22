@@ -9,17 +9,17 @@ import clsx from "clsx";
 // only rendered into the bar when `isAdmin`.
 const TABS = [
   { href: "/settings", label: "General", exact: true, adminOnly: false },
-  { href: "/settings/organization", label: "Organization", adminOnly: true },
+  { href: "/settings/practice", label: "Practice", adminOnly: true },
   {
-    href: "/settings/reference-data",
-    label: "Reference data",
+    href: "/settings/clinical-setup",
+    label: "Clinical setup",
     adminOnly: true,
   },
   { href: "/settings/templates", label: "Note templates", adminOnly: true },
-  { href: "/settings/dictionary", label: "Dictionary", adminOnly: true },
+  { href: "/settings/vocabulary", label: "Vocabulary", adminOnly: true },
   { href: "/settings/transcription", label: "Transcription", adminOnly: true },
   { href: "/settings/scheduling", label: "Scheduling", adminOnly: true },
-  { href: "/settings/team", label: "Team", adminOnly: true },
+  { href: "/settings/staff", label: "Staff", adminOnly: true },
 ];
 
 export function SettingsTabs({

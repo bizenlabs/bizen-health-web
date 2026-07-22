@@ -3,14 +3,14 @@ import { getBranding } from "@/lib/organization";
 import { BrandingForm } from "./_components/branding-form";
 import { LogoInput } from "./_components/logo-input";
 
-export default async function OrganizationSettingsPage() {
+export default async function PracticeSettingsPage() {
   await requireRole("tenant_admin", "super_admin");
 
   const branding = await getBranding();
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold">Organization</h1>
+      <h1 className="text-2xl font-semibold">Practice</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Your clinic&apos;s name, contact details and logo. These appear on the
         documents you produce — dictation exports today, invoices later.

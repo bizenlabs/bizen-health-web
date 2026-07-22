@@ -17,7 +17,7 @@ export async function updateBrandingAction(
 ): Promise<void> {
   await requireRole("tenant_admin", "super_admin");
   await updateBranding(input);
-  revalidatePath("/settings/organization");
+  revalidatePath("/settings/practice");
 }
 
 export async function uploadLogoAction(formData: FormData): Promise<void> {
@@ -27,11 +27,11 @@ export async function uploadLogoAction(formData: FormData): Promise<void> {
     throw new Error("No logo file provided");
   }
   await uploadLogo(file);
-  revalidatePath("/settings/organization");
+  revalidatePath("/settings/practice");
 }
 
 export async function deleteLogoAction(): Promise<void> {
   await requireRole("tenant_admin", "super_admin");
   await deleteLogo();
-  revalidatePath("/settings/organization");
+  revalidatePath("/settings/practice");
 }

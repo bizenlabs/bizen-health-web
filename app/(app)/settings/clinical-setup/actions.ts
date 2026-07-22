@@ -12,7 +12,7 @@ import {
 } from "@/lib/reference-data";
 import type { RefDataActionState } from "./_components/ref-data-state";
 
-const PATH = "/settings/reference-data";
+const PATH = "/settings/clinical-setup";
 
 /** Singular noun per register — for the user-facing action messages. */
 const NOUN: Record<RegisterKey, string> = {

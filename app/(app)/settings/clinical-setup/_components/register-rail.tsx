@@ -28,7 +28,7 @@ export function RegisterRail({
   const showRetired = searchParams.get("includeRetired") === "true";
 
   const hrefFor = (key: RegisterKey) =>
-    `/settings/reference-data?register=${key}${
+    `/settings/clinical-setup?register=${key}${
       showRetired ? "&includeRetired=true" : ""
     }`;
 

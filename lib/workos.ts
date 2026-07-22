@@ -78,7 +78,7 @@ export const listMemberships = cache(
 );
 
 // Memberships for an organization (everyone in this tenant). Used by
-// /settings/team. Cached per-request.
+// /settings/staff. Cached per-request.
 export const listOrgMembers = cache(
   async (organizationId: string): Promise<OrganizationMembership[]> => {
     const page = await getWorkOS().userManagement.listOrganizationMemberships({

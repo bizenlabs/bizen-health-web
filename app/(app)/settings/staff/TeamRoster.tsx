@@ -21,7 +21,7 @@ function formatDate(iso: string): string {
 }
 
 /**
- * Client roster for /settings/team. Members come from core's `providers`
+ * Client roster for /settings/staff. Members come from core's `providers`
  * mirror, which reconciles from WorkOS via webhook — so role changes and
  * removals are applied optimistically here rather than re-fetched, which
  * would race the webhook. Pending invitations are read live from WorkOS and

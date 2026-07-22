@@ -9,9 +9,9 @@ function one(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
 }
 
-export default async function ReferenceDataPage({
+export default async function ClinicalSetupPage({
   searchParams,
-}: PageProps<"/settings/reference-data">) {
+}: PageProps<"/settings/clinical-setup">) {
   await requireRole("tenant_admin", "super_admin");
 
   const sp = await searchParams;
@@ -22,16 +22,17 @@ export default async function ReferenceDataPage({
   // per-load cost.
   const items = await listRefItems(active.key, showRetired);
 
-  const retiredHref = `/settings/reference-data?register=${active.key}${
+  const retiredHref = `/settings/clinical-setup?register=${active.key}${
     showRetired ? "" : "&includeRetired=true"
   }`;
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Reference data</h1>
+      <h1 className="text-2xl font-semibold">Clinical setup</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        The lookup lists your clinic files against. Each list is seeded when the
-        workspace is created and is yours to curate.
+        The clinical lists your clinic files against — visit types, encounter
+        types and more. Each list is seeded when the workspace is created and is
+        yours to curate.
       </p>
 
       <div className="mt-8 grid gap-8 md:grid-cols-[200px_1fr]">
