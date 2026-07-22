@@ -56,6 +56,10 @@ export interface UseTranscriptionResult {
       // The tenant's transcription language/accent (Deepgram BCP-47 tag).
       // Persisted for the session so a mic-switch reconnect keeps it.
       language?: string;
+      // Spoken-punctuation mode — the speaker dictates punctuation, so the
+      // stream connects with Deepgram auto-punctuation off. Persisted for the
+      // session so a mic-switch reconnect keeps it.
+      spokenPunctuation?: boolean;
     },
   ) => Promise<void>;
   // Mute the mic + gate audio without tearing down the Deepgram WS or the
@@ -69,6 +73,10 @@ export interface UseTranscriptionResult {
   // keeping the transcription id, accumulated segments, and sequence numbering
   // intact. A no-op unless a session is live.
   switchDevice: (deviceId: string | null) => Promise<void>;
+  // Flip spoken-punctuation mode. It's a Deepgram connection parameter, so a
+  // live session keeps its current stream until reconnected — call
+  // switchDevice with the current mic right after to apply it immediately.
+  setSpokenPunctuation: (on: boolean) => void;
   stop: () => Promise<TranscriptionDetail | null>;
   // Current input loudness in [0, 1] — read on an animation frame to drive the
   // live level meter. Stable identity; safe to depend on.
@@ -102,6 +110,9 @@ export function useTranscription(): UseTranscriptionResult {
   // the reconnected Deepgram stream keeps the same vocabulary.
   const keytermsRef = useRef<string[]>([]);
   const languageRef = useRef<string>(DEFAULT_TRANSCRIPTION_LANGUAGE);
+  // Spoken-punctuation mode for this session — read at (re)connect time so a
+  // mid-session toggle takes effect on the next reconnect.
+  const spokenPunctuationRef = useRef<boolean>(false);
   // True between session creation and an explicit stop()/failure. The unmount
   // cleanup uses it to finalise a session abandoned by a client-side nav.
   const liveRef = useRef<boolean>(false);
@@ -233,12 +244,14 @@ export function useTranscription(): UseTranscriptionResult {
         seedSegments?: LiveSegment[];
         keyterms?: string[];
         language?: string;
+        spokenPunctuation?: boolean;
       },
     ) => {
       const seed = opts?.seedSegments ?? [];
       inputRef.current = input;
       keytermsRef.current = opts?.keyterms ?? [];
       languageRef.current = opts?.language ?? DEFAULT_TRANSCRIPTION_LANGUAGE;
+      spokenPunctuationRef.current = opts?.spokenPunctuation ?? false;
       setError(null);
       setState("starting");
       setSegments(seed);
@@ -275,6 +288,7 @@ export function useTranscription(): UseTranscriptionResult {
           diarize: input.mode === "ENCOUNTER",
           keyterms: keytermsRef.current,
           language: languageRef.current,
+          spokenPunctuation: spokenPunctuationRef.current,
         });
         streamRef.current = stream;
         stream.on(handleEvent);
@@ -344,6 +358,7 @@ export function useTranscription(): UseTranscriptionResult {
           diarize: input.mode === "ENCOUNTER",
           keyterms: keytermsRef.current,
           language: languageRef.current,
+          spokenPunctuation: spokenPunctuationRef.current,
         });
         streamRef.current = stream;
         stream.on(handleEvent);
@@ -374,6 +389,10 @@ export function useTranscription(): UseTranscriptionResult {
     },
     [flush, handleEvent, teardown],
   );
+
+  const setSpokenPunctuation = useCallback((on: boolean) => {
+    spokenPunctuationRef.current = on;
+  }, []);
 
   const stop = useCallback(async (): Promise<TranscriptionDetail | null> => {
     liveRef.current = false;
@@ -450,6 +469,7 @@ export function useTranscription(): UseTranscriptionResult {
     pause,
     resume,
     switchDevice,
+    setSpokenPunctuation,
     stop,
     getLevel,
     isMuted,

@@ -105,6 +105,14 @@ import {
   type DictionaryRule,
 } from "@/lib/transcription/dictionary-replace";
 import { useDictionary } from "@/lib/transcription/use-dictionary";
+import {
+  readStoredBool,
+  SPOKEN_PUNCTUATION_DEFAULT,
+  SPOKEN_PUNCTUATION_KEY,
+  VOICE_COMMANDS_DEFAULT,
+  VOICE_COMMANDS_KEY,
+  writeStoredBool,
+} from "@/lib/transcription/dictation-prefs";
 
 // The unified dictation editor — one Tiptap surface for the whole lifecycle.
 // While the mic is live the editor is read-only and finalised utterances are
@@ -123,22 +131,6 @@ const DEVICE_KEY = "bizen:dictation:device";
 // Carries the editor's cursor across the editing → resume-recording
 // navigation. Read once on the next mount and cleared.
 const CURSOR_KEY = "bizen:dictation:cursor";
-// Persisted voice-command preferences (per browser).
-const VOICE_COMMANDS_KEY = "bizen:dictation:voiceCommands";
-const PUNCTUATION_KEY = "bizen:dictation:spokenPunctuation";
-
-// Read a persisted boolean preference. Returns `fallback` on the server (no
-// localStorage) and when nothing is stored — the toggles only drive a control
-// that's rendered client-side while recording, so there's no hydration mismatch.
-function readStoredBool(key: string, fallback: boolean): boolean {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const v = localStorage.getItem(key);
-    return v === null ? fallback : v === "1";
-  } catch {
-    return fallback;
-  }
-}
 
 type Phase = "recording" | "editing" | "voided";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -572,6 +564,7 @@ export function DictationEditor({
     pause,
     resume,
     switchDevice,
+    setSpokenPunctuation,
     stop,
     getLevel,
     isMuted,
@@ -604,14 +597,14 @@ export function DictationEditor({
 
   // Voice commands: spoken "new line", "next section", "scratch that", etc.
   // become structure/navigation/editing actions instead of literal text. On by
-  // default; spoken punctuation is a separate opt-in since smart_format already
-  // punctuates. Refs mirror the state so the streaming effect reads them without
-  // a dependency.
+  // default; spoken punctuation is a separate opt-in that also turns Deepgram's
+  // auto-punctuation off (the two would collide). Refs mirror the state so the
+  // streaming effect reads them without a dependency.
   const [voiceCommandsOn, setVoiceCommandsOn] = useState(() =>
-    readStoredBool(VOICE_COMMANDS_KEY, true),
+    readStoredBool(VOICE_COMMANDS_KEY, VOICE_COMMANDS_DEFAULT),
   );
   const [punctuationOn, setPunctuationOn] = useState(() =>
-    readStoredBool(PUNCTUATION_KEY, false),
+    readStoredBool(SPOKEN_PUNCTUATION_KEY, SPOKEN_PUNCTUATION_DEFAULT),
   );
   const voiceCommandsOnRef = useRef(voiceCommandsOn);
   const punctuationOnRef = useRef(punctuationOn);
@@ -879,6 +872,7 @@ export function DictationEditor({
         seedSegments: initialSegments,
         keyterms: dictKeytermsRef.current,
         language,
+        spokenPunctuation: punctuationOnRef.current,
       },
     );
   }, [phase, start, templateId, transcriptionId, initialSegments, language]);
@@ -994,11 +988,7 @@ export function DictationEditor({
   // the toggles change. Initial values are hydrated via lazy useState above.
   useEffect(() => {
     voiceCommandsOnRef.current = voiceCommandsOn;
-    try {
-      localStorage.setItem(VOICE_COMMANDS_KEY, voiceCommandsOn ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
+    writeStoredBool(VOICE_COMMANDS_KEY, voiceCommandsOn);
   }, [voiceCommandsOn]);
   // Keep the dictionary refs current as the async load resolves. flushSegments
   // and the start effect read these refs, so a load that finishes after
@@ -1011,12 +1001,21 @@ export function DictationEditor({
   }, [dictEntries]);
   useEffect(() => {
     punctuationOnRef.current = punctuationOn;
-    try {
-      localStorage.setItem(PUNCTUATION_KEY, punctuationOn ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
+    writeStoredBool(SPOKEN_PUNCTUATION_KEY, punctuationOn);
   }, [punctuationOn]);
+
+  // Toggle spoken punctuation. Besides the client-side replacement it's also a
+  // Deepgram connection parameter (auto-punctuation goes off with it on), so a
+  // live session reconnects on the current mic to apply it — the same path as
+  // a mic switch, so at most a beat of audio around the swap is lost.
+  const handleTogglePunctuation = useCallback(() => {
+    const next = !punctuationOnRef.current;
+    setPunctuationOn(next);
+    setSpokenPunctuation(next);
+    if (state === "recording" || state === "paused") {
+      void switchDevice(selectedDeviceId ?? null);
+    }
+  }, [setSpokenPunctuation, state, switchDevice, selectedDeviceId]);
   useEffect(() => {
     return () => {
       if (commandClearTimer.current) clearTimeout(commandClearTimer.current);
@@ -1594,7 +1593,7 @@ export function DictationEditor({
                     enabled={voiceCommandsOn}
                     onToggle={() => setVoiceCommandsOn((v) => !v)}
                     punctuation={punctuationOn}
-                    onTogglePunctuation={() => setPunctuationOn((v) => !v)}
+                    onTogglePunctuation={handleTogglePunctuation}
                   />
                   {paused ? (
                     <button
@@ -2043,7 +2042,8 @@ function MicPicker({
 // The voice-command control: a toggle for spoken commands plus a reference of
 // the phrases it understands. Shown only while recording. Defaults on — the
 // matching is whole-utterance for the risky commands, so false fires are rare —
-// with spoken punctuation as a separate opt-in (smart_format already punctuates).
+// with spoken punctuation as a separate opt-in that swaps Deepgram's
+// auto-punctuation off so the two never collide.
 const COMMAND_REFERENCE: { group: string; phrases: string[] }[] = [
   { group: "Structure", phrases: ["new line", "new paragraph"] },
   {
@@ -2136,8 +2136,9 @@ function VoiceCommandControl({
             onChange={onTogglePunctuation}
           />
           <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
-            Say “period”, “comma”, etc. Off by default — auto-punctuation is
-            already on.
+            {punctuation
+              ? "Say “period”, “comma”, etc. Automatic punctuation is off while this is on."
+              : "Say “period”, “comma”, etc. Off by default — automatic punctuation handles it."}
           </p>
         </div>
       </PopoverPanel>

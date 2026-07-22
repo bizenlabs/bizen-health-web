@@ -18,9 +18,11 @@
 //
 // Commands act on FINAL utterances only — never on interim/partial text.
 //
-// Spoken punctuation ("period", "comma", …) is supported but OPT-IN: Deepgram
-// runs with `smart_format=true`, which already punctuates, so it's off by
-// default and only applied when `opts.punctuation` is set.
+// Spoken punctuation ("period", "comma", …) is supported but OPT-IN: by
+// default Deepgram runs with `smart_format=true`, which already punctuates.
+// When the user opts in (`opts.punctuation`), the stream is instead opened
+// with auto-punctuation OFF (see deepgram-client) and this parser turns the
+// spoken words into characters — exactly one of the two punctuates.
 
 export type VoiceCommand =
   | { kind: "newline" }

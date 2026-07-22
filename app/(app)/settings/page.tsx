@@ -1,5 +1,7 @@
+import { Divider } from "@/components/catalyst/divider";
 import { requireSession } from "@/lib/auth";
 import { workos } from "@/lib/workos";
+import { DictationSection } from "./DictationSection";
 import { GeneralSection } from "./GeneralSection";
 
 export default async function Settings() {
@@ -26,6 +28,9 @@ export default async function Settings() {
         orgType={session.orgType}
         isAdmin={isAdmin}
       />
+
+      <Divider soft className="my-8" />
+      <DictationSection />
     </div>
   );
 }

@@ -58,6 +58,24 @@ describe("buildListenUrl", () => {
     ).toBeNull();
   });
 
+  it("keeps smart_format on by default", () => {
+    expect(paramsOf(buildListenUrl(false)).get("smart_format")).toBe("true");
+    expect(paramsOf(buildListenUrl(false)).get("numerals")).toBeNull();
+  });
+
+  it("turns auto-punctuation off in spoken-punctuation mode", () => {
+    const p = paramsOf(buildListenUrl(false, [], "en-IN", true));
+    expect(p.get("smart_format")).toBe("false");
+    // Digit conversion survives losing smart_format via `numerals`.
+    expect(p.get("numerals")).toBe("true");
+  });
+
+  it("omits numerals for non-English spoken-punctuation streams", () => {
+    const p = paramsOf(buildListenUrl(false, [], "hi", true));
+    expect(p.get("smart_format")).toBe("false");
+    expect(p.get("numerals")).toBeNull();
+  });
+
   it("adds diarize only when requested and always passes keyterms", () => {
     const p = paramsOf(buildListenUrl(true, ["ibuprofen", "amlodipine"], "hi"));
     expect(p.get("diarize")).toBe("true");

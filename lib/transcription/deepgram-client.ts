@@ -54,6 +54,10 @@ export interface DeepgramStreamOptions {
   // The tenant's transcription language/accent (BCP-47). Optional — falls back
   // to DEFAULT_TRANSCRIPTION_LANGUAGE when the tenant hasn't set one.
   language?: string;
+  // The clinician dictates punctuation themselves ("period", "comma", …), so
+  // Deepgram's auto-punctuation must be off — otherwise both fire and the text
+  // ends up double-punctuated. Default false (auto-punctuation on).
+  spokenPunctuation?: boolean;
 }
 
 // Deepgram caps key-term prompting at 500 tokens per request. We can't count
@@ -84,6 +88,7 @@ export function buildListenUrl(
   diarize: boolean,
   keyterms: string[] = [],
   language: string = DEFAULT_TRANSCRIPTION_LANGUAGE,
+  spokenPunctuation: boolean = false,
 ): string {
   const params = new URLSearchParams({
     // The model follows the language: English accents → nova-3-medical
@@ -94,7 +99,9 @@ export function buildListenUrl(
     // language (hi, mr, bn, ta, te).
     language,
     interim_results: "true",
-    smart_format: "true",
+    // In spoken-punctuation mode auto-punctuation must not also fire, and
+    // punctuation is part of smart_format — so the whole thing goes off.
+    smart_format: spokenPunctuation ? "false" : "true",
     encoding: "linear16",
     sample_rate: "16000",
     channels: "1",
@@ -104,6 +111,9 @@ export function buildListenUrl(
   // languages don't support it.
   if (isEnglishTranscriptionLanguage(language)) {
     params.set("measurements", "true");
+    // Losing smart_format also loses digit conversion; `numerals` restores
+    // "one twenty" → "120" on its own. English-only, like measurements.
+    if (spokenPunctuation) params.set("numerals", "true");
   }
   if (diarize) params.set("diarize", "true");
   if (keyterms.length > 0) appendKeyterms(params, keyterms);
@@ -229,7 +239,12 @@ export function createDeepgramStream(
     async connect({ getToken }: ConnectOptions) {
       const token = await getToken();
       ws = new WebSocket(
-        buildListenUrl(opts.diarize, opts.keyterms ?? [], opts.language),
+        buildListenUrl(
+          opts.diarize,
+          opts.keyterms ?? [],
+          opts.language,
+          opts.spokenPunctuation ?? false,
+        ),
         ["token", token],
       );
       ws.binaryType = "arraybuffer";
