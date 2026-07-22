@@ -172,7 +172,7 @@ export function TemplateBrowser({
             onChange={(e) => onFilterChange(setShowRetired)(e.target.checked)}
             className="rounded border-zinc-300 dark:border-zinc-700"
           />
-          Show retired
+          Show inactive
         </label>
 
         <div className="relative ml-auto w-56">

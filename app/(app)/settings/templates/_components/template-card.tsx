@@ -70,7 +70,7 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
         {template.source === "SYSTEM" ? (
           <Badge tone="zinc">System</Badge>
         ) : null}
-        {retired ? <Badge tone="zinc">Retired</Badge> : null}
+        {retired ? <Badge tone="zinc">Inactive</Badge> : null}
         <span className="ml-auto text-[10px] text-zinc-400 dark:text-zinc-500">
           v{template.version} · {formatRelativeDate(template.updatedAt)}
         </span>
@@ -115,9 +115,9 @@ export function TemplateCard({ template }: { template: TemplateSummary }) {
             </ActionForm>
             <ActionForm
               action={retireTemplateAction.bind(null, template.id)}
-              confirm={`Retire "${template.name}"? It stays referenceable by history but is hidden from pickers.`}
+              confirm={`Deactivate "${template.name}"? It stays referenceable by history but is hidden from pickers.`}
             >
-              <ActionButton danger>Retire</ActionButton>
+              <ActionButton danger>Deactivate</ActionButton>
             </ActionForm>
             <ActionForm
               action={deleteTemplateAction.bind(null, template.id)}

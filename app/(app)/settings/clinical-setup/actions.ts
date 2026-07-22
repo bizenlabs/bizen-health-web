@@ -85,7 +85,7 @@ export async function retireRefItemAction(
     await retireRefItem(register, id);
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    throw new Error(`Could not retire the ${NOUN[register]}.`);
+    throw new Error(`Could not deactivate the ${NOUN[register]}.`);
   }
   revalidatePath(PATH);
 }

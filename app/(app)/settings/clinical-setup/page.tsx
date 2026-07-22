@@ -50,7 +50,7 @@ export default async function ClinicalSetupPage({
               href={retiredHref}
               className="shrink-0 text-sm text-zinc-500 hover:text-zinc-700 hover:underline dark:hover:text-zinc-300"
             >
-              {showRetired ? "Hide retired" : "Show retired"}
+              {showRetired ? "Hide inactive" : "Show inactive"}
             </Link>
           </div>
 

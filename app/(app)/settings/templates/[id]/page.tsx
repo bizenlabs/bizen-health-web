@@ -52,7 +52,7 @@ export default async function EditTemplatePage({
         ) : null}
         {template.retired ? (
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-            retired
+            inactive
           </span>
         ) : null}
         {canPromote ? (

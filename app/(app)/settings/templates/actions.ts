@@ -174,7 +174,7 @@ export async function retireTemplateAction(id: string): Promise<void> {
     await retireTemplate(id);
   } catch (err) {
     if (err instanceof ApiError) throw err;
-    throw new Error("Could not retire the template.");
+    throw new Error("Could not deactivate the template.");
   }
   revalidatePath(LIST_PATH);
 }
