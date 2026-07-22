@@ -16,17 +16,25 @@ export type WordCaptureState = "idle" | "recording" | "error";
 
 export interface UseWordCapture {
   state: WordCaptureState;
-  /** Live interim text while recording — show it so the user sees progress. */
-  partial: string;
+  /**
+   * Live text while recording — finalised utterances so far plus the current
+   * interim. Show it so the user sees words appear as they speak, not only
+   * after stopping.
+   */
+  preview: string;
   error: string | null;
   start: () => Promise<void>;
   /** Stop and resolve with the captured text (finals + any trailing partial). */
   stop: () => Promise<string>;
 }
 
+function composeText(finals: string[], partial: string): string {
+  return [...finals, partial].join(" ").replace(/\s+/g, " ").trim();
+}
+
 export function useWordCapture(): UseWordCapture {
   const [state, setState] = useState<WordCaptureState>("idle");
-  const [partial, setPartial] = useState("");
+  const [preview, setPreview] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const streamRef = useRef<TranscriptionStream | null>(null);
@@ -51,7 +59,7 @@ export function useWordCapture(): UseWordCapture {
 
   const start = useCallback(async () => {
     setError(null);
-    setPartial("");
+    setPreview("");
     finalsRef.current = [];
     partialRef.current = "";
     setState("recording");
@@ -62,10 +70,10 @@ export function useWordCapture(): UseWordCapture {
         if (e.kind === "final") {
           finalsRef.current.push(e.text);
           partialRef.current = "";
-          setPartial("");
+          setPreview(composeText(finalsRef.current, ""));
         } else if (e.kind === "partial") {
           partialRef.current = e.text;
-          setPartial(e.text);
+          setPreview(composeText(finalsRef.current, e.text));
         } else if (e.kind === "error") {
           setError(e.error.message);
           setState("error");
@@ -95,15 +103,12 @@ export function useWordCapture(): UseWordCapture {
     setState("idle");
     // Keep a trailing partial that never got finalised — a single word said
     // right before stop often arrives only as interim text.
-    const text = [...finalsRef.current, partialRef.current]
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
+    const text = composeText(finalsRef.current, partialRef.current);
     finalsRef.current = [];
     partialRef.current = "";
-    setPartial("");
+    setPreview("");
     return text;
   }, [teardown]);
 
-  return { state, partial, error, start, stop };
+  return { state, preview, error, start, stop };
 }

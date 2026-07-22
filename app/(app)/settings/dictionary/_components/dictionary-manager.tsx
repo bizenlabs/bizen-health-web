@@ -273,6 +273,17 @@ function EntryForm({
   const [writtenForm, setWrittenForm] = useState(initial?.writtenForm ?? "");
   const [language, setLanguage] = useState(initial?.language ?? "en");
   const [pending, startTransition] = useTransition();
+  const capture = useWordCapture();
+  const recording = capture.state === "recording";
+
+  async function toggleRecording() {
+    if (recording) {
+      const text = await capture.stop();
+      if (text) setSpokenForm(text);
+    } else {
+      await capture.start();
+    }
+  }
 
   function submit() {
     if (!spokenForm.trim()) return;
@@ -295,13 +306,19 @@ function EntryForm({
         <Field label="Word as spoken">
           <div className="flex items-center gap-1.5">
             <input
-              value={spokenForm}
+              value={recording ? capture.preview : spokenForm}
               onChange={(e) => setSpokenForm(e.target.value)}
-              placeholder="e.g. BP"
+              readOnly={recording}
+              placeholder={recording ? "Listening…" : "e.g. BP"}
               className={inputClass}
             />
-            <RecordButton onCaptured={(t) => setSpokenForm(t)} />
+            <RecordButton recording={recording} onToggle={toggleRecording} />
           </div>
+          {capture.error ? (
+            <p className="text-xs text-red-600">
+              Recording failed: {capture.error}
+            </p>
+          ) : null}
         </Field>
         <Field label="Written form (optional)">
           <input
@@ -332,7 +349,7 @@ function EntryForm({
         <button
           type="button"
           onClick={submit}
-          disabled={pending || !spokenForm.trim()}
+          disabled={pending || recording || !spokenForm.trim()}
           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
         >
           {pending ? (
@@ -359,24 +376,19 @@ function EntryForm({
   );
 }
 
-// Record-to-fill: speak a word, see it transcribed, drop it into the field.
-function RecordButton({ onCaptured }: { onCaptured: (text: string) => void }) {
-  const { state, partial, error, start, stop } = useWordCapture();
-  const recording = state === "recording";
-
-  async function toggle() {
-    if (recording) {
-      const text = await stop();
-      if (text) onCaptured(text);
-    } else {
-      await start();
-    }
-  }
-
+// Record-to-fill: speak a word, watch it appear in the field, edit, save. The
+// capture hook lives in EntryForm so the live preview can render in the input.
+function RecordButton({
+  recording,
+  onToggle,
+}: {
+  recording: boolean;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={onToggle}
       title={recording ? "Stop and use what you said" : "Record a word"}
       aria-label={recording ? "Stop recording" : "Record a word"}
       className={clsx(
@@ -391,10 +403,6 @@ function RecordButton({ onCaptured }: { onCaptured: (text: string) => void }) {
       ) : (
         <Mic className="size-4" />
       )}
-      {recording && partial ? (
-        <span className="sr-only">{partial}</span>
-      ) : null}
-      {error ? <span className="sr-only">{error}</span> : null}
     </button>
   );
 }
