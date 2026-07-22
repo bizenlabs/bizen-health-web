@@ -177,16 +177,20 @@ function formatYmd(value: string | null): string | null {
   return `${Number(d)} ${month} ${y}`;
 }
 
-/** Whole years from a Y-M-D birthdate as of `now`; null if missing/implausible. */
-function ageYears(birthdate: string | null, now: Date): string | null {
+/**
+ * Age from a Y-M-D birthdate as of `now` — whole years, except under 2 years
+ * where it renders as months ("9 months") so infants never show as "0"; null if
+ * missing/implausible.
+ */
+function ageFromBirthdate(birthdate: string | null, now: Date): string | null {
   const m = birthdate && /^(\d{4})-(\d{2})-(\d{2})/.exec(birthdate);
   if (!m) return null;
   const [, y, mo, d] = m.map(Number);
-  let age = now.getFullYear() - y;
-  const beforeBirthday =
-    now.getMonth() + 1 < mo || (now.getMonth() + 1 === mo && now.getDate() < d);
-  if (beforeBirthday) age--;
-  return age >= 0 && age < 150 ? String(age) : null;
+  let months = (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - mo);
+  if (now.getDate() < d) months--;
+  if (months < 0 || months >= 150 * 12) return null;
+  if (months < 24) return months === 1 ? "1 month" : `${months} months`;
+  return String(Math.floor(months / 12));
 }
 
 function toYmd(d: Date): string {
@@ -231,7 +235,7 @@ function resolveValue(
     case "patient.name":
       return patient.name;
     case "patient.age":
-      return ageYears(patient.birthdate, now);
+      return ageFromBirthdate(patient.birthdate, now);
     case "patient.sex":
       return patient.gender ? GENDER_LABEL[patient.gender] : null;
     case "patient.dob":

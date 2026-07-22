@@ -41,6 +41,17 @@ describe("resolveTemplateVariables — known values", () => {
   it("fills patient name, age, sex, dob and id", () => {
     expect(resolve("Name: {{patient.name}}", SUNITA)).toBe("Name: Sunita Devi");
     expect(resolve("Age: {{patient.age}}", SUNITA)).toBe("Age: 36");
+  });
+
+  it("renders under-2 ages in months, never as 0 years", () => {
+    const infant = { ...SUNITA, birthdate: "2025-09-11" }; // 9 months at NOW
+    expect(resolve("Age: {{patient.age}}", infant)).toBe("Age: 9 months");
+    const oneMonth = { ...SUNITA, birthdate: "2026-05-11" };
+    expect(resolve("Age: {{patient.age}}", oneMonth)).toBe("Age: 1 month");
+    const toddler = { ...SUNITA, birthdate: "2024-08-11" }; // 22 months
+    expect(resolve("Age: {{patient.age}}", toddler)).toBe("Age: 22 months");
+    const twoYears = { ...SUNITA, birthdate: "2024-06-11" };
+    expect(resolve("Age: {{patient.age}}", twoYears)).toBe("Age: 2");
     expect(resolve("Sex: {{patient.sex}}", SUNITA)).toBe("Sex: Female");
     expect(resolve("DOB: {{patient.dob}}", SUNITA)).toBe("DOB: 15 Jan 1990");
     expect(resolve("ID: {{patient.id}}", SUNITA)).toBe("ID: MRN-0042");
