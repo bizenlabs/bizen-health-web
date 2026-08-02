@@ -1,9 +1,52 @@
 import { WORKLET_SOURCE } from "./worklet-processor";
 
-// Microphone capture: getUserMedia → 16 kHz AudioContext → AudioWorklet that
-// downsamples to Int16 PCM. Browser-only; never imported on the server.
-//
-// Ported from the med-scribe POC (lib/audio/capture.ts).
+// Microphone capture: getUserMedia → AudioContext at the device's native rate
+// → anti-alias filter → AudioWorklet that downsamples to 16 kHz Int16 PCM.
+// Browser-only; never imported on the server.
+
+// What Deepgram is told to expect, and what the worklet converts down to.
+const TARGET_SAMPLE_RATE = 16000;
+
+// Anti-alias corner, comfortably below the 8 kHz Nyquist of the 16 kHz target
+// while leaving the speech band (including sibilance, which carries a lot of
+// the consonant detail Deepgram needs) intact.
+const ANTI_ALIAS_HZ = 7000;
+// Cascaded one-pole-pair sections; three gives roughly -45 dB at 16 kHz, so
+// content that would fold back into the speech band is gone before decimation.
+const ANTI_ALIAS_STAGES = 3;
+// Web Audio expresses a lowpass Q in decibels, not as a bare quality factor.
+// -3.01 dB is a linear Q of 0.707 — maximally flat, no resonant peak at the
+// corner, which is what a filter cascade wants.
+const LOWPASS_Q_DB = -3.01;
+
+// Platform DSP applied to the microphone before the audio reaches us.
+export interface AudioCaptureOptions {
+  // Defaults to FALSE, unlike the browser default. None of these flows play
+  // audio while recording, so there is no far-end signal for an echo canceller
+  // to cancel — but asking for one still pulls mobile capture into the
+  // platform's voice-communication path, which is tuned for phone calls
+  // (narrowband, aggressive gating) rather than dictation. Set true only if a
+  // flow starts playing audio while the mic is live.
+  echoCancellation?: boolean;
+  // The platform's own noise cancellation. On by default — for a clinic room
+  // this is the single most useful piece of processing available, and it is
+  // far better than anything we could run in JS.
+  noiseSuppression?: boolean;
+  autoGainControl?: boolean;
+}
+
+// What the pipeline actually negotiated, for diagnosing device-specific audio
+// problems. The context rate in particular varies by platform and is the first
+// thing worth checking when transcription quality differs between devices.
+export interface AudioDiagnostics {
+  contextSampleRate: number | null;
+  // Whether the anti-alias cascade is in the graph. False when the context
+  // already runs at the target rate and there is nothing to filter.
+  antiAliased: boolean;
+  // The constraints the browser actually applied, which frequently differ from
+  // the ones requested.
+  trackSettings: MediaTrackSettings | null;
+}
 
 export interface AudioCapture {
   start(onChunk: (pcm: Int16Array) => void): Promise<void>;
@@ -25,6 +68,9 @@ export interface AudioCapture {
   // source-muted track yields silence while still "live", so the meter reads 0
   // with no obvious cause. Returns false before capture starts.
   isMuted(): boolean;
+  // What the pipeline negotiated on this device. Read it when transcription
+  // quality is bad on one platform and fine on another.
+  getDiagnostics(): AudioDiagnostics;
 }
 
 // Acquire the mic stream, pinning the requested device when one is given. The
@@ -34,13 +80,28 @@ export interface AudioCapture {
 // mic so recording still starts rather than dead-ending; the editor's mic
 // picker lets the clinician switch afterwards. Permission denials (NotAllowed)
 // are not recoverable this way and propagate unchanged.
-async function acquireStream(deviceId?: string): Promise<MediaStream> {
+async function acquireStream(
+  deviceId?: string,
+  opts: AudioCaptureOptions = {},
+): Promise<MediaStream> {
   const base: MediaTrackConstraints = {
     channelCount: 1,
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
+    echoCancellation: opts.echoCancellation ?? false,
+    noiseSuppression: opts.noiseSuppression ?? true,
+    autoGainControl: opts.autoGainControl ?? true,
   };
+  // Apple's on-device voice isolation, where the browser advertises it. Gated
+  // on getSupportedConstraints rather than set blindly: it is not in every
+  // engine, and an unrecognised key in an `exact` position would over-constrain
+  // the request into failing.
+  const supported = navigator.mediaDevices.getSupportedConstraints() as
+    | (MediaTrackSupportedConstraints & { voiceIsolation?: boolean })
+    | undefined;
+  if (supported?.voiceIsolation) {
+    (
+      base as MediaTrackConstraints & { voiceIsolation?: boolean }
+    ).voiceIsolation = true;
+  }
   try {
     return await navigator.mediaDevices.getUserMedia({
       audio: deviceId ? { ...base, deviceId: { exact: deviceId } } : base,
@@ -62,11 +123,15 @@ async function acquireStream(deviceId?: string): Promise<MediaStream> {
   }
 }
 
-export function createAudioCapture(deviceId?: string): AudioCapture {
+export function createAudioCapture(
+  deviceId?: string,
+  options: AudioCaptureOptions = {},
+): AudioCapture {
   let stream: MediaStream | null = null;
   let ctx: AudioContext | null = null;
   let node: AudioWorkletNode | null = null;
   let source: MediaStreamAudioSourceNode | null = null;
+  let filters: BiquadFilterNode[] = [];
   let blobUrl: string | null = null;
   let paused = false;
   // Smoothed input loudness, updated on every PCM frame. Fast attack so a word
@@ -75,11 +140,16 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
 
   return {
     async start(onChunk) {
-      stream = await acquireStream(deviceId);
+      stream = await acquireStream(deviceId, options);
 
-      // Request a 16 kHz AudioContext; browsers that can't honor it resample
-      // transparently and the worklet normalizes the rest.
-      ctx = new AudioContext({ sampleRate: 16000 });
+      // Run at the device's native rate. Asking for a 16 kHz context instead
+      // looks tidier — the worklet ratio becomes 1 and the browser resamples
+      // for us — but a MediaStream source feeding a context whose rate differs
+      // from the hardware rate is badly handled on mobile Safari, and the
+      // failure is silent: audio arrives distorted rather than absent, so it
+      // reads as "transcription is just worse on phones". The worklet converts
+      // from whatever rate this turns out to be.
+      ctx = new AudioContext();
       if (ctx.state === "suspended") await ctx.resume();
 
       const blob = new Blob([WORKLET_SOURCE], {
@@ -109,7 +179,41 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
         if (paused) return;
         onChunk(pcm);
       };
-      source.connect(node);
+
+      // Anti-alias before the worklet decimates. Dropping 48 kHz to 16 kHz by
+      // interpolating between samples folds everything above 8 kHz back down
+      // into the speech band as noise. Required because we now do the
+      // downsampling ourselves — a browser asked for a 16 kHz context filters
+      // on our behalf, and this replaces that.
+      // Skipped when the context already runs at the target rate: there is no
+      // decimation happening, so the filter would only remove usable band.
+      let tail: AudioNode = source;
+      if (ctx.sampleRate > TARGET_SAMPLE_RATE) {
+        filters = Array.from({ length: ANTI_ALIAS_STAGES }, () => {
+          const filter = ctx!.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.value = ANTI_ALIAS_HZ;
+          filter.Q.value = LOWPASS_Q_DB;
+          return filter;
+        });
+        for (const filter of filters) {
+          tail.connect(filter);
+          tail = filter;
+        }
+      }
+      tail.connect(node);
+
+      // Mobile suspends the context on an interruption — an incoming call,
+      // the app going to background, a route change when headphones are
+      // unplugged. Without this the worklet simply stops receiving audio and
+      // the recording dies silently mid-consultation.
+      ctx.onstatechange = () => {
+        if (ctx?.state === "suspended") {
+          void ctx.resume().catch(() => {
+            /* interruption still in progress; the next event retries */
+          });
+        }
+      };
     },
 
     pause() {
@@ -128,8 +232,12 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
 
     async stop() {
       try {
+        // Drop the interruption handler first: closing the context fires a
+        // statechange, and the handler would try to resume what we're closing.
+        if (ctx) ctx.onstatechange = null;
         node?.port.close();
         node?.disconnect();
+        filters.forEach((f) => f.disconnect());
         source?.disconnect();
         stream?.getTracks().forEach((t) => t.stop());
         await ctx?.close();
@@ -139,6 +247,7 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
         ctx = null;
         node = null;
         source = null;
+        filters = [];
         blobUrl = null;
         level = 0;
       }
@@ -152,6 +261,14 @@ export function createAudioCapture(deviceId?: string): AudioCapture {
       // `muted` is the source-level flag (OS/hardware), not the app-level
       // `enabled` that pause() toggles — so this stays false across a pause.
       return stream?.getAudioTracks()[0]?.muted ?? false;
+    },
+
+    getDiagnostics() {
+      return {
+        contextSampleRate: ctx?.sampleRate ?? null,
+        antiAliased: filters.length > 0,
+        trackSettings: stream?.getAudioTracks()[0]?.getSettings() ?? null,
+      };
     },
 
     async listDevices() {
