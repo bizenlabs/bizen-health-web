@@ -2,18 +2,27 @@
 // string so it ships inside the JS bundle rather than as a separate asset.
 // Emits ~40 ms frames of Int16 PCM @ 16 kHz — the format Deepgram expects.
 //
-// Ported from the med-scribe POC (lib/audio/worklet-processor.ts).
+// The processor converts from whatever rate the AudioContext is running at
+// (48 kHz on most phones, 44.1 kHz on some, 16 kHz where the browser honours
+// the request) down to 16 kHz. Anti-alias filtering is NOT done here — it
+// happens in the audio graph ahead of this node, where the browser's native
+// biquads can do it far more cheaply. See `audio-capture.ts`.
 export const WORKLET_SOURCE = /* js */ `
 class PcmDownsamplerProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this._inRate = sampleRate;
-    this._outRate = 16000;
-    this._ratio = this._inRate / this._outRate;
+    this._ratio = sampleRate / 16000;
     // ~40 ms at 16 kHz = 640 samples
     this._outFrame = 640;
-    this._buf = [];
-    this._bufLen = 0;
+    // Input samples read but not yet consumed, carried across process() calls
+    // together with the sub-sample phase. Resetting these every frame — as an
+    // earlier version did by clearing its whole buffer — restarts the
+    // interpolator at an arbitrary offset roughly 25 times a second, putting a
+    // small discontinuity into the audio at every frame boundary.
+    this._carry = new Float32Array(0);
+    this._phase = 0;
+    this._out = new Int16Array(this._outFrame);
+    this._outLen = 0;
   }
 
   process(inputs) {
@@ -22,38 +31,37 @@ class PcmDownsamplerProcessor extends AudioWorkletProcessor {
     const ch = input[0];
 
     // CRITICAL: the worklet runtime reuses the input Float32Array between
-    // process() calls, so we MUST copy before buffering. Without the copy
-    // every buffered chunk points at the same memory and gets overwritten
+    // process() calls, so we MUST copy before retaining any of it. Without the
+    // copy every retained chunk points at the same memory and gets overwritten
     // with later audio — the transcript repeats, then silence-detects out.
-    const copy = new Float32Array(ch.length);
-    copy.set(ch);
-    this._buf.push(copy);
-    this._bufLen += copy.length;
+    const buf = new Float32Array(this._carry.length + ch.length);
+    buf.set(this._carry, 0);
+    buf.set(ch, this._carry.length);
 
-    const needed = Math.ceil(this._outFrame * this._ratio);
-    if (this._bufLen < needed) return true;
-
-    const merged = new Float32Array(this._bufLen);
-    let off = 0;
-    for (const b of this._buf) {
-      merged.set(b, off);
-      off += b.length;
-    }
-    this._buf = [];
-    this._bufLen = 0;
-
-    const outLen = Math.floor(merged.length / this._ratio);
-    const out = new Int16Array(outLen);
-    for (let i = 0; i < outLen; i++) {
-      const srcIdx = i * this._ratio;
-      const i0 = Math.floor(srcIdx);
-      const i1 = Math.min(i0 + 1, merged.length - 1);
-      const frac = srcIdx - i0;
-      const s = merged[i0] * (1 - frac) + merged[i1] * frac;
+    // Walk the input at the resampling ratio, interpolating between the two
+    // neighbouring samples. Stops one short of the end so buf[i0 + 1] is always
+    // in range; the remainder becomes carry.
+    let pos = this._phase;
+    while (pos + 1 < buf.length) {
+      const i0 = Math.floor(pos);
+      const frac = pos - i0;
+      const s = buf[i0] * (1 - frac) + buf[i0 + 1] * frac;
       const clamped = Math.max(-1, Math.min(1, s));
-      out[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+      this._out[this._outLen++] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+      if (this._outLen === this._outFrame) {
+        const frame = this._out;
+        this.port.postMessage(frame, [frame.buffer]);
+        // The transfer detaches the buffer, so the next frame needs fresh
+        // storage rather than reusing this one.
+        this._out = new Int16Array(this._outFrame);
+        this._outLen = 0;
+      }
+      pos += this._ratio;
     }
-    this.port.postMessage(out, [out.buffer]);
+
+    const consumed = Math.floor(pos);
+    this._carry = buf.slice(consumed);
+    this._phase = pos - consumed;
     return true;
   }
 }

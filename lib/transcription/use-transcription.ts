@@ -13,7 +13,11 @@ import type {
   StartTranscriptionInput,
   TranscriptionDetail,
 } from "@/lib/transcriptions";
-import { type AudioCapture, createAudioCapture } from "./audio-capture";
+import {
+  type AudioCapture,
+  type AudioDiagnostics,
+  createAudioCapture,
+} from "./audio-capture";
 import { createDeepgramStream } from "./deepgram-client";
 import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "./languages";
 import type {
@@ -97,6 +101,12 @@ export interface UseTranscriptionResult {
   // Whether the mic is muted at the source (e.g. closed laptop lid). Polled to
   // surface a silent-but-live mic. Stable identity; safe to depend on.
   isMuted: () => boolean;
+  // What the audio pipeline negotiated on this device — context sample rate,
+  // whether anti-alias filtering is engaged, and the constraints the browser
+  // actually applied. Null when nothing is capturing. Audio quality varies by
+  // platform in ways only the device can reveal, so this is the handle for
+  // diagnosing "it transcribes worse on my phone" without guesswork.
+  getDiagnostics: () => AudioDiagnostics | null;
 }
 
 const FLUSH_BATCH = 5;
@@ -555,6 +565,12 @@ export function useTranscription(): UseTranscriptionResult {
   // an unexplained flat meter.
   const isMuted = useCallback(() => captureRef.current?.isMuted() ?? false, []);
 
+  // What the audio pipeline actually negotiated on this device.
+  const getDiagnostics = useCallback(
+    () => captureRef.current?.getDiagnostics() ?? null,
+    [],
+  );
+
   // Tear down capture + socket if the component unmounts mid-recording.
   // A client-side navigation away never calls stop(), so without this the
   // backend session would be stranded IN_PROGRESS forever. Implicitly finalise
@@ -602,5 +618,6 @@ export function useTranscription(): UseTranscriptionResult {
     stop,
     getLevel,
     isMuted,
+    getDiagnostics,
   };
 }
