@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import type { EncounterDetail, EncounterType } from "@/lib/encounters";
+import { DictatableNotesField } from "./dictatable-notes-field";
 import {
   ENCOUNTER_FORM_INITIAL,
   type EncounterFormState,
@@ -122,15 +123,9 @@ export function EncounterForm({
           </div>
 
           <div className="md:col-span-2">
-            <label htmlFor="notes" className="block text-xs text-zinc-500">
-              Notes
-            </label>
-            <textarea
-              id="notes"
-              name="notes"
-              rows={5}
+            <DictatableNotesField
+              encounterId={mode.kind === "edit" ? mode.encounterId : null}
               defaultValue={initial?.notes ?? ""}
-              className="mt-1 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-transparent"
             />
           </div>
         </div>

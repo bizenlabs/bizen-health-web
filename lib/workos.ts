@@ -30,6 +30,9 @@ export type SessionClaims = {
   tenantSlug: string | null;
   tenantStatus: TenantStatus | null;
   orgType: OrgType | null;
+  // The tenant's default transcription language/accent (Deepgram BCP-47 tag,
+  // e.g. "en-IN"). Null when unset — callers fall back to the app default.
+  transcriptionLanguage: string | null;
   accessToken: string;
 };
 
@@ -37,7 +40,25 @@ type OrgMetadata = {
   tenant_slug?: string;
   tenant_status?: TenantStatus;
   org_type?: OrgType;
+  transcription_language?: string;
 };
+
+// WorkOS replaces org metadata wholesale on every update, so any writer must
+// re-pass the full record or silently drop the other keys. Rebuild it from the
+// session here and let callers override just the field they're changing.
+export function orgMetadataFromSession(
+  session: SessionClaims,
+): Record<string, string> {
+  const meta: Record<string, string> = {
+    tenant_slug: session.tenantSlug ?? "",
+    tenant_status: session.tenantStatus ?? "active",
+    org_type: session.orgType ?? "clinic",
+  };
+  if (session.transcriptionLanguage) {
+    meta.transcription_language = session.transcriptionLanguage;
+  }
+  return meta;
+}
 
 const fetchOrgMetadata = cache(
   async (organizationId: string): Promise<OrgMetadata> => {
@@ -57,7 +78,7 @@ export const listMemberships = cache(
 );
 
 // Memberships for an organization (everyone in this tenant). Used by
-// /settings/team. Cached per-request.
+// /settings/staff. Cached per-request.
 export const listOrgMembers = cache(
   async (organizationId: string): Promise<OrganizationMembership[]> => {
     const page = await getWorkOS().userManagement.listOrganizationMemberships({
@@ -93,6 +114,7 @@ export async function getSession(): Promise<SessionClaims | null> {
     tenantSlug: meta.tenant_slug ?? null,
     tenantStatus: meta.tenant_status ?? null,
     orgType: meta.org_type ?? null,
+    transcriptionLanguage: meta.transcription_language ?? null,
     accessToken: info.accessToken,
   };
 }
@@ -169,6 +191,7 @@ export async function authenticateRequest(request: NextRequest): Promise<{
       tenantSlug: meta.tenant_slug ?? null,
       tenantStatus: meta.tenant_status ?? null,
       orgType: meta.org_type ?? null,
+      transcriptionLanguage: meta.transcription_language ?? null,
       accessToken: session.accessToken,
     },
     responseHeaders: headers,

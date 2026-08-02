@@ -280,6 +280,20 @@ export function PatientForm(props: PatientFormProps) {
             </Field>
           </div>
 
+          <div className="sm:col-span-3">
+            <Field>
+              <Label>Phone number</Label>
+              <Description>Optional.</Description>
+              <Input
+                name="phoneNumber"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                defaultValue={patient?.contact.phoneNumber ?? ""}
+              />
+            </Field>
+          </div>
+
           {mode === "register" && props.identifierTypes.length > 0 ? (
             <>
               <div className="sm:col-span-3">

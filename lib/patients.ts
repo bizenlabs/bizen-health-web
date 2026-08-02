@@ -28,6 +28,7 @@ export type PatientSummary = {
   gender: Gender | null;
   primaryIdentifierType: string | null;
   primaryIdentifier: string | null;
+  phoneNumber: string | null;
   dead: boolean;
 };
 
@@ -63,11 +64,16 @@ export type Address = {
   longitude: string | null;
 };
 
+export type Contact = {
+  phoneNumber: string | null;
+};
+
 export type PatientDetail = {
   id: string;
   demographics: Demographics;
   name: Name;
   address: Address;
+  contact: Contact;
   allergyStatus: AllergyStatus;
   identifiers: PatientIdentifier[];
   deathDate: string | null;
@@ -104,6 +110,7 @@ export type RegisterPatientInput = {
     degree?: string | null;
   };
   address?: Address | null;
+  contact?: Contact | null;
   identifiers?: { typeId: string; value: string; preferred: boolean }[];
 };
 
@@ -115,6 +122,7 @@ export type UpdatePatientInput = {
   demographics?: RegisterPatientInput["demographics"];
   name?: RegisterPatientInput["name"];
   address?: Address | null;
+  contact?: Contact | null;
 };
 
 export const listPatients = (

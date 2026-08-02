@@ -1,5 +1,7 @@
+import { Divider } from "@/components/catalyst/divider";
 import { requireSession } from "@/lib/auth";
 import { workos } from "@/lib/workos";
+import { DictationSection } from "./DictationSection";
 import { GeneralSection } from "./GeneralSection";
 
 export default async function Settings() {
@@ -14,19 +16,21 @@ export default async function Settings() {
   const isAdmin = session.role === "tenant_admin";
 
   return (
-    <div className="px-6 py-10">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+    <div className="max-w-4xl">
+      <h1 className="text-2xl font-semibold">General</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Manage your workspace.
+        Basic details about your workspace and how it&apos;s identified.
       </p>
 
       <GeneralSection
         orgName={org.name}
-        tenantSlug={session.tenantSlug}
         organizationId={session.organizationId}
         orgType={session.orgType}
         isAdmin={isAdmin}
       />
+
+      <Divider soft className="my-8" />
+      <DictationSection />
     </div>
   );
 }

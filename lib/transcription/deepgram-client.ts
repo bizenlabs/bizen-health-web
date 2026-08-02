@@ -1,0 +1,306 @@
+import type {
+  ConnectOptions,
+  TranscriptEvent,
+  TranscriptionStream,
+} from "./types";
+import {
+  DEFAULT_TRANSCRIPTION_LANGUAGE,
+  isEnglishTranscriptionLanguage,
+  modelForTranscriptionLanguage,
+} from "./languages";
+
+// Browser → Deepgram streaming client. Deepgram's browser-auth pattern is a
+// WebSocket subprotocol — `new WebSocket(url, ['token', <key>])` — not an HTTP
+// header, so we keep our own transport rather than the @deepgram/sdk client.
+//
+// Ported from the med-scribe POC (lib/transcription/deepgram.ts); the POC's
+// always-on `diarize` is now an option (encounter = on, dictation = off), and
+// the SDK type dependency is replaced by the minimal inline shapes below.
+
+const LISTEN_URL = "wss://api.deepgram.com/v1/listen";
+
+// Cap the pending-audio buffer so it never grows unbounded if the WS never
+// opens. 500 frames × ~40 ms ≈ 20 s — plenty for a slow handshake.
+const MAX_PENDING_CHUNKS = 500;
+const KEEPALIVE_MS = 5000;
+
+type DeepgramWord = {
+  word: string;
+  punctuated_word?: string;
+  speaker?: number;
+};
+type DeepgramAlternative = { transcript: string; words?: DeepgramWord[] };
+type DeepgramResults = {
+  type: "Results";
+  is_final: boolean;
+  channel: { alternatives: DeepgramAlternative[] };
+};
+// Deepgram emits a final Metadata message at end-of-stream carrying the audio
+// duration it processed (billable seconds) and the request id.
+type DeepgramMetadata = {
+  type: "Metadata";
+  duration?: number;
+  request_id?: string;
+};
+type DeepgramMessage = DeepgramResults | DeepgramMetadata | { type: string };
+
+export interface DeepgramStreamOptions {
+  // Encounter transcriptions diarize (speaker 0/1/…); dictation does not.
+  diarize: boolean;
+  // The clinic's custom-dictionary spoken forms, fed to Deepgram as `keyterm`
+  // prompts so accented or unusual terms (drug names, proper nouns) transcribe
+  // correctly. Optional — omit for no custom vocabulary.
+  keyterms?: string[];
+  // The tenant's transcription language/accent (BCP-47). Optional — falls back
+  // to DEFAULT_TRANSCRIPTION_LANGUAGE when the tenant hasn't set one.
+  language?: string;
+  // The clinician dictates punctuation themselves ("period", "comma", …), so
+  // Deepgram's auto-punctuation must be off — otherwise both fire and the text
+  // ends up double-punctuated. Default false (auto-punctuation on).
+  spokenPunctuation?: boolean;
+}
+
+// Deepgram caps key-term prompting at 500 tokens per request. We can't count
+// tokens here, so approximate with words and stay well under: cap the count and
+// a word budget. Excess terms are dropped (the dictionary list is ordered, so
+// this is a stable prefix).
+const MAX_KEYTERMS = 100;
+const KEYTERM_WORD_BUDGET = 400;
+
+function appendKeyterms(params: URLSearchParams, keyterms: string[]): void {
+  let budget = KEYTERM_WORD_BUDGET;
+  let count = 0;
+  for (const raw of keyterms) {
+    const term = raw.trim();
+    if (!term) continue;
+    if (count >= MAX_KEYTERMS) break;
+    const words = term.split(/\s+/).length;
+    if (budget - words < 0) break;
+    // nova-3 takes `keyterm` (repeatable). URLSearchParams encodes each value.
+    params.append("keyterm", term);
+    budget -= words;
+    count += 1;
+  }
+}
+
+// Exported for unit testing of the param assembly.
+export function buildListenUrl(
+  diarize: boolean,
+  keyterms: string[] = [],
+  language: string = DEFAULT_TRANSCRIPTION_LANGUAGE,
+  spokenPunctuation: boolean = false,
+): string {
+  const params = new URLSearchParams({
+    // The model follows the language: English accents → nova-3-medical
+    // (medical vocabulary), every other language → general nova-3.
+    model: modelForTranscriptionLanguage(language),
+    // Per-tenant language/accent. English variants (en-IN, en, …), the mixed
+    // Hindi+English "multi" code-switching option, or a single non-English
+    // language (hi, mr, bn, ta, te).
+    language,
+    interim_results: "true",
+    // In spoken-punctuation mode auto-punctuation must not also fire, and
+    // punctuation is part of smart_format — so the whole thing goes off.
+    smart_format: spokenPunctuation ? "false" : "true",
+    encoding: "linear16",
+    sample_rate: "16000",
+    channels: "1",
+  });
+  // Abbreviate spoken metric units ("centimeter" → "cm", "milligram" → "mg").
+  // English-oriented, so only request it for English languages — other
+  // languages don't support it.
+  if (isEnglishTranscriptionLanguage(language)) {
+    params.set("measurements", "true");
+    // Losing smart_format also loses digit conversion; `numerals` restores
+    // "one twenty" → "120" on its own. English-only, like measurements.
+    if (spokenPunctuation) params.set("numerals", "true");
+  }
+  if (diarize) params.set("diarize", "true");
+  if (keyterms.length > 0) appendKeyterms(params, keyterms);
+  return `${LISTEN_URL}?${params.toString()}`;
+}
+
+export function createDeepgramStream(
+  opts: DeepgramStreamOptions,
+): TranscriptionStream {
+  let ws: WebSocket | null = null;
+  let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+  const pending: Int16Array[] = [];
+  const listeners = new Set<(e: TranscriptEvent) => void>();
+  const emit = (e: TranscriptEvent) => listeners.forEach((l) => l(e));
+
+  function sendControl(type: "KeepAlive" | "CloseStream"): void {
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type }));
+    }
+  }
+
+  function stopKeepalive(): void {
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = null;
+    }
+  }
+
+  function startKeepalive(): void {
+    stopKeepalive();
+    keepaliveTimer = setInterval(() => sendControl("KeepAlive"), KEEPALIVE_MS);
+  }
+
+  function flushPending(): void {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    while (pending.length > 0) {
+      const chunk = pending.shift()!;
+      ws.send(chunk.buffer);
+    }
+  }
+
+  function handleResults(msg: DeepgramResults): void {
+    const alt = msg.channel.alternatives[0];
+    if (!alt || !alt.transcript) return;
+
+    const words = alt.words ?? [];
+    if (words.length === 0) {
+      emit({
+        kind: msg.is_final ? "final" : "partial",
+        text: alt.transcript,
+        ts: Date.now(),
+      });
+      return;
+    }
+
+    if (msg.is_final) {
+      // Split into consecutive same-speaker spans so a speaker swap
+      // mid-segment surfaces as separate utterances.
+      let spanStart = 0;
+      for (let i = 1; i <= words.length; i++) {
+        const prev = words[i - 1].speaker;
+        const curr = i < words.length ? words[i].speaker : undefined;
+        if (i === words.length || curr !== prev) {
+          const text = words
+            .slice(spanStart, i)
+            .map((w) => w.punctuated_word ?? w.word)
+            .join(" ")
+            .trim();
+          if (text) {
+            emit({ kind: "final", text, speaker: prev, ts: Date.now() });
+          }
+          spanStart = i;
+        }
+      }
+      return;
+    }
+
+    // Partials: emit one event tagged with the dominant speaker.
+    const speakerCounts = new Map<number | undefined, number>();
+    for (const w of words) {
+      speakerCounts.set(w.speaker, (speakerCounts.get(w.speaker) ?? 0) + 1);
+    }
+    let top: number | undefined;
+    let best = -1;
+    for (const [sp, count] of speakerCounts) {
+      if (count > best) {
+        best = count;
+        top = sp;
+      }
+    }
+    emit({
+      kind: "partial",
+      text: alt.transcript,
+      speaker: top,
+      ts: Date.now(),
+    });
+  }
+
+  function handleMessage(data: string): void {
+    let msg: DeepgramMessage;
+    try {
+      msg = JSON.parse(data) as DeepgramMessage;
+    } catch {
+      return;
+    }
+    if (msg.type === "Results") {
+      handleResults(msg as DeepgramResults);
+      return;
+    }
+    if (msg.type === "Metadata") {
+      const meta = msg as DeepgramMetadata;
+      emit({
+        kind: "metadata",
+        durationSeconds: meta.duration ?? 0,
+        requestId: meta.request_id,
+      });
+      return;
+    }
+    // SpeechStarted / UtteranceEnd are ignored for now.
+  }
+
+  return {
+    async connect({ getToken }: ConnectOptions) {
+      const token = await getToken();
+      ws = new WebSocket(
+        buildListenUrl(
+          opts.diarize,
+          opts.keyterms ?? [],
+          opts.language,
+          opts.spokenPunctuation ?? false,
+        ),
+        ["token", token],
+      );
+      ws.binaryType = "arraybuffer";
+
+      await new Promise<void>((resolve, reject) => {
+        if (!ws) return reject(new Error("socket not created"));
+        ws.onopen = () => resolve();
+        ws.onerror = () => reject(new Error("deepgram socket error"));
+      });
+
+      ws.onmessage = (ev) => {
+        if (typeof ev.data === "string") handleMessage(ev.data);
+      };
+      ws.onerror = () => {
+        emit({ kind: "error", error: new Error("deepgram socket error") });
+      };
+      ws.onclose = (ev) => {
+        stopKeepalive();
+        emit({ kind: "closed", reason: ev.reason || `code ${ev.code}` });
+        ws = null;
+      };
+
+      // Drain anything captured while the WS was opening, then begin
+      // keepalives so the stream survives any lull in speech.
+      flushPending();
+      startKeepalive();
+    },
+
+    sendPcm(chunk) {
+      if (ws?.readyState === WebSocket.OPEN) {
+        if (pending.length > 0) flushPending();
+        ws.send(chunk.buffer);
+        return;
+      }
+      // WS still opening (or momentarily closed). Buffer so the first words
+      // aren't lost to the handshake window.
+      pending.push(chunk);
+      if (pending.length > MAX_PENDING_CHUNKS) {
+        pending.splice(0, pending.length - MAX_PENDING_CHUNKS);
+      }
+    },
+
+    async close() {
+      stopKeepalive();
+      if (!ws) return;
+      try {
+        sendControl("CloseStream");
+      } finally {
+        ws.close();
+        ws = null;
+      }
+    },
+
+    on(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}

@@ -7,6 +7,7 @@ import { listConcepts, listObservationsForEncounter } from "@/lib/observations";
 import { ApiError } from "@/lib/api";
 import { restoreEncounterAction } from "../actions";
 import { ObservationsPanel } from "../_components/observations-panel";
+import { TranscriptionPanel } from "../_components/transcription-panel";
 import { VoidEncounterForm } from "../_components/void-encounter-form";
 
 export default async function EncounterDetailPage({
@@ -108,6 +109,10 @@ export default async function EncounterDetailPage({
           observations={observations}
           concepts={concepts}
         />
+      )}
+
+      {encounter.voided ? null : (
+        <TranscriptionPanel encounterId={encounter.id} />
       )}
 
       {encounter.voided ? null : (

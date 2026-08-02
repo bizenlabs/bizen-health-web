@@ -35,23 +35,24 @@ import { SidebarLayout } from "@/components/catalyst/sidebar-layout";
 import { switchOrgAction } from "@/app/select-org/actions";
 import {
   ArrowRightStartOnRectangleIcon,
-  ArrowsRightLeftIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   ComputerDesktopIcon,
   MoonIcon,
-  PlusIcon,
   SunIcon,
   UserCircleIcon,
 } from "@heroicons/react/16/solid";
 import {
-  CalendarDaysIcon,
+  // FIRST-RELEASE: re-enable with the Appointments nav item below.
+  // CalendarDaysIcon,
   Cog6ToothIcon,
   HomeIcon,
-  UserGroupIcon,
+  MicrophoneIcon,
+  ShieldCheckIcon,
   UsersIcon,
 } from "@heroicons/react/20/solid";
+import { Can } from "@/components/auth/Can";
 
 type Membership = {
   organizationId: string;
@@ -62,9 +63,7 @@ type Membership = {
 type Props = {
   currentOrgId: string;
   currentOrgName: string;
-  currentOrgSlug: string | null;
   memberships: Membership[];
-  isTenantAdmin: boolean;
   user: {
     name: string;
     email: string;
@@ -94,10 +93,6 @@ function AccountDropdownMenu({
       <DropdownItem href="/settings">
         <UserCircleIcon />
         <DropdownLabel>My account</DropdownLabel>
-      </DropdownItem>
-      <DropdownItem href="/select-org">
-        <ArrowsRightLeftIcon />
-        <DropdownLabel>Switch organization</DropdownLabel>
       </DropdownItem>
       <DropdownDivider />
       <DropdownSection>
@@ -137,9 +132,7 @@ function AccountDropdownMenu({
 export function AppShell({
   currentOrgId,
   currentOrgName,
-  currentOrgSlug,
   memberships,
-  isTenantAdmin,
   user,
   children,
 }: Props) {
@@ -198,13 +191,6 @@ export function AppShell({
                     <Cog6ToothIcon />
                     <DropdownLabel>Settings</DropdownLabel>
                   </DropdownItem>
-                  {currentOrgSlug ? (
-                    <DropdownItem disabled>
-                      <DropdownLabel className="text-xs text-zinc-500">
-                        {currentOrgSlug}
-                      </DropdownLabel>
-                    </DropdownItem>
-                  ) : null}
                   {otherOrgs.length > 0 ? (
                     <>
                       <DropdownDivider />
@@ -229,11 +215,6 @@ export function AppShell({
                       ))}
                     </>
                   ) : null}
-                  <DropdownDivider />
-                  <DropdownItem href="/select-org">
-                    <PlusIcon />
-                    <DropdownLabel>Manage organizations</DropdownLabel>
-                  </DropdownItem>
                 </DropdownMenu>
               </Dropdown>
             </SidebarHeader>
@@ -254,36 +235,41 @@ export function AppShell({
                   <UsersIcon />
                   <SidebarLabel>Patients</SidebarLabel>
                 </SidebarItem>
-                <SidebarItem
+                {/* FIRST-RELEASE: scheduling ships after the dictation-only
+                    release. The /appointments routes still exist — this only
+                    hides the entry point from testers. */}
+                {/* <SidebarItem
                   href="/appointments"
                   current={pathname.startsWith("/appointments")}
                 >
                   <CalendarDaysIcon />
                   <SidebarLabel>Appointments</SidebarLabel>
-                </SidebarItem>
+                </SidebarItem> */}
                 <SidebarItem
-                  href="/settings"
-                  current={
-                    pathname === "/settings" ||
-                    (pathname.startsWith("/settings/") &&
-                      !pathname.startsWith("/settings/team"))
-                  }
+                  href="/dictation"
+                  current={pathname.startsWith("/dictation")}
                 >
-                  <Cog6ToothIcon />
-                  <SidebarLabel>Settings</SidebarLabel>
+                  <MicrophoneIcon />
+                  <SidebarLabel>Dictation</SidebarLabel>
                 </SidebarItem>
-                {isTenantAdmin ? (
-                  <SidebarItem
-                    href="/settings/team"
-                    current={pathname.startsWith("/settings/team")}
-                  >
-                    <UserGroupIcon />
-                    <SidebarLabel>Team</SidebarLabel>
-                  </SidebarItem>
-                ) : null}
               </SidebarSection>
 
               <SidebarSpacer />
+
+              {/* Staff-only. Jumps out of the tenant app into the
+                  cross-tenant super-admin console (its own layout). UX gate
+                  only — `/admin` re-checks the role server-side. */}
+              <Can role="super_admin">
+                <SidebarSection>
+                  <SidebarItem
+                    href="/admin"
+                    current={pathname.startsWith("/admin")}
+                  >
+                    <ShieldCheckIcon />
+                    <SidebarLabel>Admin</SidebarLabel>
+                  </SidebarItem>
+                </SidebarSection>
+              </Can>
             </SidebarBody>
 
             <SidebarFooter className="max-lg:hidden">

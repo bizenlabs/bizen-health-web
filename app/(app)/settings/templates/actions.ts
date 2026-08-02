@@ -1,0 +1,259 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { ApiError } from "@/lib/api";
+import { requireRole } from "@/lib/auth";
+import {
+  cloneTemplate,
+  createTemplate,
+  deleteTemplate,
+  promoteTemplate,
+  restoreTemplate,
+  restoreTemplateVersion,
+  retireTemplate,
+  setDefaultTemplate,
+  TEMPLATE_CATEGORIES,
+  TEMPLATE_SPECIALTIES,
+  type TemplateCategory,
+  type TemplateSpecialty,
+  updateTemplate,
+} from "@/lib/templates";
+import type { TemplateFormState } from "./_components/template-editor-state";
+
+const LIST_PATH = "/settings/templates";
+
+function str(formData: FormData, key: string): string {
+  return (formData.get(key) ?? "").toString().trim();
+}
+
+/** Build a failed-action state — a form-level message and/or per-field errors. */
+function fail(
+  error: string | null,
+  fieldErrors: Record<string, string> = {},
+): TemplateFormState {
+  return { error, fieldErrors, savedAt: null };
+}
+
+/**
+ * Turn an API failure into form state: a duplicate name and bean-validation
+ * field errors land on the offending field; anything else is form-level.
+ */
+function fromApiError(err: unknown, fallback: string): TemplateFormState {
+  if (err instanceof ApiError) {
+    if (err.code === "TEMPLATE_NAME_TAKEN") {
+      return fail(null, { name: err.message });
+    }
+    if (err.fields.length > 0) {
+      const fieldErrors: Record<string, string> = {};
+      for (const f of err.fields) fieldErrors[f.path] = f.message;
+      return fail(null, fieldErrors);
+    }
+    return fail(err.message);
+  }
+  return fail(fallback);
+}
+
+/** Read the editable fields off a submitted form, validating as we go. */
+function readInput(formData: FormData):
+  | {
+      ok: true;
+      name: string;
+      description: string | null;
+      category: TemplateCategory;
+      specialty: TemplateSpecialty | null;
+      content: string;
+      exampleOutput: string | null;
+    }
+  | { ok: false; state: TemplateFormState } {
+  const name = str(formData, "name");
+  const description = str(formData, "description");
+  const category = str(formData, "category");
+  const specialty = str(formData, "specialty");
+  // Browsers submit <textarea> values with CRLF line endings; normalise to
+  // plain \n so the stored Markdown body stays consistent.
+  const content = (formData.get("content") ?? "")
+    .toString()
+    .replace(/\r\n?/g, "\n");
+  const exampleOutput = (formData.get("exampleOutput") ?? "")
+    .toString()
+    .replace(/\r\n?/g, "\n")
+    .trim();
+
+  if (!name) {
+    return {
+      ok: false,
+      state: fail(null, { name: "Enter a name for the template." }),
+    };
+  }
+  if (!TEMPLATE_CATEGORIES.includes(category as TemplateCategory)) {
+    return {
+      ok: false,
+      state: fail(null, { category: "Choose a category for the template." }),
+    };
+  }
+  if (
+    specialty &&
+    !TEMPLATE_SPECIALTIES.includes(specialty as TemplateSpecialty)
+  ) {
+    return {
+      ok: false,
+      state: fail(null, { specialty: "Choose a specialty from the list." }),
+    };
+  }
+  return {
+    ok: true,
+    name,
+    description: description || null,
+    category: category as TemplateCategory,
+    specialty: specialty ? (specialty as TemplateSpecialty) : null,
+    content,
+    exampleOutput: exampleOutput || null,
+  };
+}
+
+export async function createTemplateAction(
+  _prev: TemplateFormState,
+  formData: FormData,
+): Promise<TemplateFormState> {
+  await requireRole("tenant_admin", "super_admin");
+
+  const input = readInput(formData);
+  if (!input.ok) return input.state;
+
+  let id: string;
+  try {
+    const created = await createTemplate({
+      name: input.name,
+      description: input.description,
+      category: input.category,
+      specialty: input.specialty,
+      content: input.content,
+      exampleOutput: input.exampleOutput,
+    });
+    id = created.id;
+  } catch (err) {
+    return fromApiError(err, "Could not create the template.");
+  }
+
+  revalidatePath(LIST_PATH);
+  redirect(`${LIST_PATH}/${id}`);
+}
+
+export async function updateTemplateAction(
+  id: string,
+  _prev: TemplateFormState,
+  formData: FormData,
+): Promise<TemplateFormState> {
+  await requireRole("tenant_admin", "super_admin");
+
+  const input = readInput(formData);
+  if (!input.ok) return input.state;
+
+  try {
+    await updateTemplate(id, {
+      name: input.name,
+      description: input.description,
+      category: input.category,
+      specialty: input.specialty,
+      content: input.content,
+      exampleOutput: input.exampleOutput,
+    });
+  } catch (err) {
+    return fromApiError(err, "Could not save your changes.");
+  }
+
+  revalidatePath(LIST_PATH);
+  revalidatePath(`${LIST_PATH}/${id}`);
+  return { error: null, fieldErrors: {}, savedAt: Date.now() };
+}
+
+export async function retireTemplateAction(id: string): Promise<void> {
+  await requireRole("tenant_admin", "super_admin");
+  try {
+    await retireTemplate(id);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not deactivate the template.");
+  }
+  revalidatePath(LIST_PATH);
+}
+
+/** Permanently delete a tenant-owned template. System templates are rejected by the API. */
+export async function deleteTemplateAction(id: string): Promise<void> {
+  await requireRole("tenant_admin", "super_admin");
+  try {
+    await deleteTemplate(id);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not delete the template.");
+  }
+  revalidatePath(LIST_PATH);
+}
+
+export async function restoreTemplateAction(id: string): Promise<void> {
+  await requireRole("tenant_admin", "super_admin");
+  try {
+    await restoreTemplate(id);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not restore the template.");
+  }
+  revalidatePath(LIST_PATH);
+}
+
+export async function setDefaultTemplateAction(id: string): Promise<void> {
+  await requireRole("tenant_admin", "super_admin");
+  try {
+    await setDefaultTemplate(id);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not set the default template.");
+  }
+  revalidatePath(LIST_PATH);
+}
+
+/** Clone a template, then jump straight into the copy's editor. */
+export async function cloneTemplateAction(id: string): Promise<void> {
+  await requireRole("tenant_admin", "super_admin");
+  let copyId: string;
+  try {
+    const copy = await cloneTemplate(id);
+    copyId = copy.id;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not clone the template.");
+  }
+  revalidatePath(LIST_PATH);
+  redirect(`${LIST_PATH}/${copyId}`);
+}
+
+/**
+ * Promote a tenant template into the global system-template library — makes it
+ * available to every clinic on the platform. Super-admin only.
+ */
+export async function promoteTemplateAction(id: string): Promise<void> {
+  await requireRole("super_admin");
+  try {
+    await promoteTemplate(id);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not promote the template.");
+  }
+  revalidatePath(LIST_PATH);
+}
+
+export async function restoreTemplateVersionAction(
+  id: string,
+  versionNumber: number,
+): Promise<void> {
+  await requireRole("tenant_admin", "super_admin");
+  try {
+    await restoreTemplateVersion(id, versionNumber);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new Error("Could not restore that version.");
+  }
+  revalidatePath(LIST_PATH);
+  revalidatePath(`${LIST_PATH}/${id}`);
+}

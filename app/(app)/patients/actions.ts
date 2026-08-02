@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import {
   addPatientIdentifier,
+  listPatients,
+  type PatientSummary,
   recordPatientDeath,
   registerPatient,
   restorePatient,
@@ -14,11 +16,27 @@ import {
   voidPatient,
   voidPatientIdentifier,
   type Address,
+  type Contact,
   type Gender,
   type RegisterPatientInput,
   type UpdatePatientInput,
 } from "@/lib/patients";
 import { ApiError } from "@/lib/api";
+
+// Typeahead search backing the patient picker (dictation linking, etc.). Returns
+// a small page of active-patient summaries; an empty/blank query lists recent
+// patients so the picker is useful before the clinician types.
+export async function searchPatientsAction(
+  q: string,
+): Promise<PatientSummary[]> {
+  await requireSession();
+  try {
+    const page = await listPatients({ q: q.trim() || undefined, size: 8 });
+    return page.content;
+  } catch {
+    return [];
+  }
+}
 
 const VALID_GENDERS: ReadonlySet<Gender> = new Set([
   "MALE",
@@ -110,6 +128,7 @@ export async function registerPatientAction(
       familyName: familyName || null,
     },
     address: extractAddress(formData),
+    contact: extractContact(formData),
     identifiers,
   };
 
@@ -206,6 +225,7 @@ export async function updatePatientAction(
       familyName: familyName || null,
     },
     address: extractAddress(formData),
+    contact: extractContact(formData),
   };
 
   try {
@@ -332,6 +352,14 @@ export async function restorePatientAction(patientId: string): Promise<void> {
   }
   revalidatePath(`/patients/${patientId}`);
   revalidatePath("/patients");
+}
+
+// Contact is always sent (the phone field is always rendered) so the
+// whole-section-replace update can also *clear* a previously-set number.
+function extractContact(formData: FormData): Contact {
+  const phoneNumber =
+    (formData.get("phoneNumber") ?? "").toString().trim() || null;
+  return { phoneNumber };
 }
 
 function extractAddress(formData: FormData): Address | null {
