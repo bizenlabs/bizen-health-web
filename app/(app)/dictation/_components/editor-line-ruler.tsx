@@ -31,6 +31,8 @@ import { useVoiceGoto } from "@/lib/transcription/use-voice-goto";
 //
 // "Go to line X" (input / Ctrl+G / ruler click / voice) mirrors the template
 // editor, resolved against the measured rows: line N is the Nth visual row.
+// The caret lands at the END of that row — the point of jumping to a line here
+// is to carry on writing or dictating it, not to edit into its middle.
 
 const GUTTER_PX = 40;
 
@@ -39,6 +41,8 @@ interface Row {
   height: number; // px, the line box height (for vertical centering)
   left: number; // px, relative to the wrapper's left edge — the text start,
   // so posAtCoords aims *inside* the text and not into a list/blockquote indent
+  right: number; // px, where the row's text ends — the caret target, so a jump
+  // lands ready to continue the line rather than in the middle of it
 }
 
 // Block tags whose *empty* instances still occupy a visual row (a blank line)
@@ -50,22 +54,24 @@ const EMPTY_BLOCK_SELECTOR =
 function measureRows(pmDom: HTMLElement, wrapper: HTMLElement): Row[] {
   const wrapRect = wrapper.getBoundingClientRect();
   const byTop = new Map<number, Row>();
-  const add = (top: number, height: number, left: number) => {
+  const add = (top: number, height: number, left: number, right: number) => {
     const relTop = top - wrapRect.top;
     const relLeft = left - wrapRect.left;
+    const relRight = right - wrapRect.left;
     const key = Math.round(relTop);
     const existing = byTop.get(key);
     if (!existing) {
-      byTop.set(key, { top: relTop, height, left: relLeft });
+      byTop.set(key, { top: relTop, height, left: relLeft, right: relRight });
       return;
     }
     // Same visual row seen again (e.g. a bold fragment): keep the tallest box
-    // so the number centres sensibly, and the leftmost start so posAtCoords
-    // aims at the beginning of the text.
+    // so the number centres sensibly, the leftmost start and the rightmost end
+    // so posAtCoords sees the row's full extent.
     byTop.set(key, {
       top: existing.top,
       height: Math.max(existing.height, height),
       left: Math.min(existing.left, relLeft),
+      right: Math.max(existing.right, relRight),
     });
   };
 
@@ -79,17 +85,20 @@ function measureRows(pmDom: HTMLElement, wrapper: HTMLElement): Row[] {
     const rects = range.getClientRects();
     for (const r of rects) {
       if (r.height === 0) continue;
-      add(r.top, r.height, r.left);
+      add(r.top, r.height, r.left, r.right);
     }
   }
 
   // Empty blocks (blank paragraph, empty list item, unfilled section) have no
   // text node — give them a number from their own box so blank lines count.
+  // Their box spans the full column width while the (only) caret position sits
+  // at its start, so `right` collapses onto `left`: an empty row has no end to
+  // aim at that isn't also its beginning.
   pmDom.querySelectorAll<HTMLElement>(EMPTY_BLOCK_SELECTOR).forEach((el) => {
     if (el.textContent && el.textContent.trim()) return;
     const r = el.getBoundingClientRect();
     if (r.height === 0) return;
-    add(r.top, r.height, r.left);
+    add(r.top, r.height, r.left, r.left);
   });
 
   return [...byTop.values()].sort((a, b) => a.top - b.top);
@@ -103,10 +112,11 @@ function measureRows(pmDom: HTMLElement, wrapper: HTMLElement): Row[] {
  */
 export interface LineRulerHandle {
   /**
-   * Resolve a 1-based visual line to a document position. The line is clamped
-   * to the note's measured range, and the clamped value is returned alongside
-   * the position so the caller can say where it actually landed. Null when
-   * nothing could be measured or the row didn't resolve to a position.
+   * Resolve a 1-based visual line to the document position at the END of that
+   * line, so dictation continues the line rather than cutting into it. The line
+   * is clamped to the note's measured range, and the clamped value is returned
+   * alongside the position so the caller can say where it actually landed. Null
+   * when nothing could be measured or the row didn't resolve to a position.
    */
   resolveLine: (n: number) => { pos: number; line: number } | null;
 }
@@ -194,27 +204,36 @@ export function EditorLineRuler({
     fonts?.ready?.then(schedule);
   }, [schedule]);
 
-  // Resolve a measured row to a document position.
+  // Resolve a measured row to a document position — the END of the row's text,
+  // so a jump lands ready to carry on writing (or dictating into) that line
+  // rather than in the middle of what's already there.
   //
-  // Aim ~one character into the row's own text, not at its exact start. Two
-  // reasons: indented content (lists, blockquotes) resolves to the text rather
-  // than the margin; and the very start of a *wrapped* line is a position that
-  // also renders at the end of the previous line, so a caret set there lands
-  // one row up — nudging inward disambiguates it.
+  // The aim point is a couple of px past the last glyph: still inside the line
+  // box, where the browser's caret hit-testing clamps to the line's end. Empty
+  // rows collapse `right` onto `left`, and the `left + 8` floor keeps them (and
+  // one-character rows) aiming *inside* the text rather than into a list or
+  // blockquote indent, which would resolve to the wrong block.
+  //
+  // If that misses — a row whose end lands outside any hit-testable box — fall
+  // back to the start-of-row aim, one character in. The nudge matters there
+  // too: the very start of a *wrapped* line is a position that also renders at
+  // the end of the previous line, so a caret set at the exact start lands one
+  // row up.
   const posForRow = useCallback(
     (row: Row): number | null => {
       const wrapRect = wrapperRef.current?.getBoundingClientRect();
       if (!wrapRect) return null;
-      const found = editor.view.posAtCoords({
-        left: wrapRect.left + row.left + 8,
-        top: wrapRect.top + row.top + row.height / 2,
-      });
+      const top = wrapRect.top + row.top + row.height / 2;
+      const aim = (left: number) => editor.view.posAtCoords({ left, top });
+      const found =
+        aim(wrapRect.left + Math.max(row.right + 2, row.left + 8)) ??
+        aim(wrapRect.left + row.left + 8);
       return found ? found.pos : null;
     },
     [editor],
   );
 
-  // Move the caret to the middle of a measured row and scroll it into view.
+  // Move the caret to the end of a measured row and scroll it into view.
   const goToRow = useCallback(
     (row: Row) => {
       const view = editor.view;

@@ -1150,7 +1150,8 @@ export function DictationEditor({
           }
           break;
         }
-        // Jump to a numbered line in the ruler's gutter. The ruler measures the
+        // Jump to a numbered line in the ruler's gutter, landing at the end of
+        // it so the next words continue that line. The ruler measures the
         // rendered layout, so this lands on the *visual* row the clinician can
         // see — the number they read off the gutter is the number they say. A
         // number past the end clamps to the last line (flagged in the flash);
