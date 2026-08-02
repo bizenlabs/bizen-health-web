@@ -3,8 +3,10 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type Ref,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
 } from "react";
@@ -94,6 +96,22 @@ function measureRows(pmDom: HTMLElement, wrapper: HTMLElement): Row[] {
 }
 
 /**
+ * Imperative handle for callers that need the ruler's line geometry without
+ * moving the caret — specifically the spoken "go to line 12" command, which
+ * fires mid-dictation (editor read-only) and must move the *dictation point*
+ * rather than the selection.
+ */
+export interface LineRulerHandle {
+  /**
+   * Resolve a 1-based visual line to a document position. The line is clamped
+   * to the note's measured range, and the clamped value is returned alongside
+   * the position so the caller can say where it actually landed. Null when
+   * nothing could be measured or the row didn't resolve to a position.
+   */
+  resolveLine: (n: number) => { pos: number; line: number } | null;
+}
+
+/**
  * Wraps the editor's <EditorContent> and paints a scroll-following gutter of
  * visual-row numbers to its left, plus (when the note is editable) a "go to
  * line" bar. Navigation moves the caret to the target row — only while the
@@ -105,11 +123,13 @@ export function EditorLineRuler({
   editor,
   editable = false,
   allowVoice = false,
+  ref,
   children,
 }: {
   editor: Editor;
   editable?: boolean;
   allowVoice?: boolean;
+  ref?: Ref<LineRulerHandle>;
   children: ReactNode;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -118,12 +138,21 @@ export function EditorLineRuler({
   const [gotoValue, setGotoValue] = useState("");
   const rafRef = useRef<number>(0);
 
-  const recompute = useCallback(() => {
+  // Measure synchronously against the DOM as it stands right now. The `rows`
+  // state below is a rAF-coalesced snapshot of this — fine for painting, but a
+  // frame stale, so callers that must act on the *current* document (a spoken
+  // "go to line") measure fresh instead.
+  const measureNow = useCallback((): Row[] => {
     const wrapper = wrapperRef.current;
     const pmDom = editor.view?.dom as HTMLElement | undefined;
-    if (!wrapper || !pmDom) return;
-    setRows(measureRows(pmDom, wrapper));
+    if (!wrapper || !pmDom) return [];
+    return measureRows(pmDom, wrapper);
   }, [editor]);
+
+  const recompute = useCallback(() => {
+    if (!wrapperRef.current || !editor.view?.dom) return;
+    setRows(measureNow());
+  }, [editor, measureNow]);
 
   // Coalesce bursts (a dictation utterance fires many transactions) into one
   // measure per frame — getClientRects() forces layout, so we don't want it per
@@ -165,29 +194,39 @@ export function EditorLineRuler({
     fonts?.ready?.then(schedule);
   }, [schedule]);
 
+  // Resolve a measured row to a document position.
+  //
+  // Aim ~one character into the row's own text, not at its exact start. Two
+  // reasons: indented content (lists, blockquotes) resolves to the text rather
+  // than the margin; and the very start of a *wrapped* line is a position that
+  // also renders at the end of the previous line, so a caret set there lands
+  // one row up — nudging inward disambiguates it.
+  const posForRow = useCallback(
+    (row: Row): number | null => {
+      const wrapRect = wrapperRef.current?.getBoundingClientRect();
+      if (!wrapRect) return null;
+      const found = editor.view.posAtCoords({
+        left: wrapRect.left + row.left + 8,
+        top: wrapRect.top + row.top + row.height / 2,
+      });
+      return found ? found.pos : null;
+    },
+    [editor],
+  );
+
   // Move the caret to the middle of a measured row and scroll it into view.
   const goToRow = useCallback(
     (row: Row) => {
       const view = editor.view;
       if (!view.editable) return; // don't move the caret mid-dictation
-      const wrapRect = wrapperRef.current?.getBoundingClientRect();
-      if (!wrapRect) return;
-      // Aim ~one character into the row's own text, not at its exact start.
-      // Two reasons: indented content (lists, blockquotes) resolves to the text
-      // rather than the margin; and the very start of a *wrapped* line is a
-      // position that also renders at the end of the previous line, so a caret
-      // set there lands one row up — nudging inward disambiguates it.
-      const found = view.posAtCoords({
-        left: wrapRect.left + row.left + 8,
-        top: wrapRect.top + row.top + row.height / 2,
-      });
-      if (!found) return;
+      const pos = posForRow(row);
+      if (pos === null) return;
       const { tr } = view.state;
-      const sel = TextSelection.near(view.state.doc.resolve(found.pos));
+      const sel = TextSelection.near(view.state.doc.resolve(pos));
       view.dispatch(tr.setSelection(sel).scrollIntoView());
       view.focus();
     },
-    [editor],
+    [editor, posForRow],
   );
 
   // Jump to the Nth visual row (1-based), clamped to the document.
@@ -198,6 +237,23 @@ export function EditorLineRuler({
       goToRow(rows[idx]);
     },
     [rows, goToRow],
+  );
+
+  // Line geometry for the dictation editor's spoken "go to line N" — resolve
+  // only, no caret move, and measured fresh so a line the current utterance
+  // just created is already numbered.
+  useImperativeHandle(
+    ref,
+    () => ({
+      resolveLine: (n: number) => {
+        const fresh = measureNow();
+        if (fresh.length === 0) return null;
+        const line = Math.min(Math.max(1, Math.floor(n)), fresh.length);
+        const pos = posForRow(fresh[line - 1]);
+        return pos === null ? null : { pos, line };
+      },
+    }),
+    [measureNow, posForRow],
   );
 
   const submitGoto = useCallback(() => {

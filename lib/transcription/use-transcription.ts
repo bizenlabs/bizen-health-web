@@ -71,11 +71,15 @@ export interface UseTranscriptionResult {
   // Swap the live recording onto a different microphone without ending the
   // session — re-acquires the mic and reconnects the Deepgram socket while
   // keeping the transcription id, accumulated segments, and sequence numbering
-  // intact. A no-op unless a session is live.
+  // intact. A no-op unless a session is live. A paused session stays paused
+  // across the swap: the rebuilt capture comes up gated and muted, and the
+  // state lands back on "paused", never on "recording".
   switchDevice: (deviceId: string | null) => Promise<void>;
   // Flip spoken-punctuation mode. It's a Deepgram connection parameter, so a
   // live session keeps its current stream until reconnected — call
   // switchDevice with the current mic right after to apply it immediately.
+  // Don't do that while paused: prefer deferring the reconnect until the
+  // clinician resumes, so a settings change never re-acquires the mic.
   setSpokenPunctuation: (on: boolean) => void;
   stop: () => Promise<TranscriptionDetail | null>;
   // Current input loudness in [0, 1] — read on an animation frame to drive the
@@ -116,6 +120,16 @@ export function useTranscription(): UseTranscriptionResult {
   // True between session creation and an explicit stop()/failure. The unmount
   // cleanup uses it to finalise a session abandoned by a client-side nav.
   const liveRef = useRef<boolean>(false);
+  // Whether the clinician has paused this session. Mirrors the "paused" state
+  // for the paths that can't wait for a re-render: switchDevice rebuilds the
+  // capture from scratch and has to know, the moment the new mic comes up,
+  // whether audio is allowed to flow. Only pause()/resume() and a fresh
+  // start() move it — a reconnect must never clear it.
+  const pausedRef = useRef<boolean>(false);
+  // True while switchDevice is between teardown and the new capture being
+  // ready. In that window there is no capture to mute, so pause()/resume()
+  // record the intent and let the rebuild apply it.
+  const swappingRef = useRef<boolean>(false);
   const startedAtRef = useRef<number>(0);
   const seqRef = useRef<number>(0);
   // Usage metering for this sitting. streamedSamples is the audio we actually
@@ -252,6 +266,9 @@ export function useTranscription(): UseTranscriptionResult {
       keytermsRef.current = opts?.keyterms ?? [];
       languageRef.current = opts?.language ?? DEFAULT_TRANSCRIPTION_LANGUAGE;
       spokenPunctuationRef.current = opts?.spokenPunctuation ?? false;
+      // A new sitting always starts live, even if the previous one was left
+      // paused before the hook was reused.
+      pausedRef.current = false;
       setError(null);
       setState("starting");
       setSegments(seed);
@@ -327,8 +344,13 @@ export function useTranscription(): UseTranscriptionResult {
   );
 
   const pause = useCallback(() => {
-    if (!captureRef.current) return;
-    captureRef.current.pause();
+    // No capture and no swap in flight means there's nothing recording to
+    // pause (idle, stopped, or torn down by a fatal error) — leave the state
+    // alone. Mid-swap there IS a live session, so the intent is recorded and
+    // the rebuilt capture comes up muted.
+    if (!captureRef.current && !swappingRef.current) return;
+    pausedRef.current = true;
+    captureRef.current?.pause();
     // Any in-flight partial won't be finalised once audio goes silent; clear
     // it so the UI doesn't show a stale italicised tail while paused.
     setPartial(null);
@@ -336,8 +358,9 @@ export function useTranscription(): UseTranscriptionResult {
   }, []);
 
   const resume = useCallback(() => {
-    if (!captureRef.current) return;
-    captureRef.current.resume();
+    if (!captureRef.current && !swappingRef.current) return;
+    pausedRef.current = false;
+    captureRef.current?.resume();
     setState("recording");
   }, []);
 
@@ -347,6 +370,7 @@ export function useTranscription(): UseTranscriptionResult {
       const input = inputRef.current;
       // Only swap a live session — there's nothing to re-point otherwise.
       if (!id || !input || !liveRef.current) return;
+      swappingRef.current = true;
       setState("starting");
       setPartial(null);
       // Persist whatever's buffered before tearing the old pipe down, then
@@ -366,10 +390,19 @@ export function useTranscription(): UseTranscriptionResult {
         const capture = createAudioCapture(deviceId ?? undefined);
         captureRef.current = capture;
         await capture.start((chunk) => {
+          // A fresh capture always comes up live, so a swap that happens while
+          // the session is paused would otherwise put it back on air. Gate on
+          // the paused intent here rather than relying on the pause() below —
+          // the worklet can emit a frame before that call lands, and audio the
+          // clinician believes is stopped must never reach Deepgram.
+          if (pausedRef.current) return;
           // Count audio actually streamed to Deepgram — the billable signal.
           streamedSamplesRef.current += chunk.length;
           stream.sendPcm(chunk);
         });
+        // Mute the track too, so the OS recording indicator matches the paused
+        // UI instead of staying lit on a gated mic.
+        if (pausedRef.current) capture.pause();
 
         await stream.connect({
           getToken: async () => {
@@ -378,13 +411,17 @@ export function useTranscription(): UseTranscriptionResult {
             return key.data.apiKey;
           },
         });
-        setState("recording");
+        // Land back on whatever the clinician chose. Only resume() moves a
+        // paused session to "recording"; a reconnect never does.
+        setState(pausedRef.current ? "paused" : "recording");
       } catch (err) {
         // Leave the session IN_PROGRESS (don't fail it) so the clinician can
         // pick another mic and try again, or resume it in a later sitting.
         setError(err instanceof Error ? err.message : String(err));
         setState("error");
         await teardown();
+      } finally {
+        swappingRef.current = false;
       }
     },
     [flush, handleEvent, teardown],
@@ -396,6 +433,7 @@ export function useTranscription(): UseTranscriptionResult {
 
   const stop = useCallback(async (): Promise<TranscriptionDetail | null> => {
     liveRef.current = false;
+    pausedRef.current = false;
     setState("stopping");
     await teardown();
     await flush();

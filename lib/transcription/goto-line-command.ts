@@ -1,7 +1,9 @@
-// Parser for the template editor's "go to line X" voice navigation. A user
-// speaks a line number ("go to line twelve", "line 12", "jump to line one
-// hundred") and this turns the finalised Deepgram utterance into a 1-based line
-// number the editor can jump to.
+// Parser for "go to line X" voice navigation. A user speaks a line number ("go
+// to line twelve", "line 12", "jump to line one hundred") and this turns the
+// finalised Deepgram utterance into a 1-based line number the editor can jump
+// to. Two callers: the one-shot mic on the editor's line ruler (useVoiceGoto),
+// and the dictation command parser (voice-commands.ts), which wraps it in a
+// stricter whole-utterance pattern before handing the tail here.
 //
 // It is intentionally narrow: a match REQUIRES the word "line" so ordinary
 // dictated prose containing a number ("she is 42") never triggers navigation.
@@ -50,12 +52,16 @@ const TENS: Record<string, number> = {
  * Fold a run of spoken number words into an integer. Handles units, teens,
  * tens (+ unit) and hundreds ("one hundred twenty three" → 123), stopping at
  * the first token that isn't part of a number. Returns null if no number word
- * was seen.
+ * was seen; `consumed` is how many leading tokens the number used, so a caller
+ * can insist the whole tail was a number.
  */
-function wordsToNumber(tokens: string[]): number | null {
+function wordsToNumber(
+  tokens: string[],
+): { value: number; consumed: number } | null {
   let result = 0;
   let current = 0;
   let matched = false;
+  let consumed = 0;
 
   for (const t of tokens) {
     if (t === "hundred") {
@@ -73,13 +79,26 @@ function wordsToNumber(tokens: string[]): number | null {
       matched = true;
     } else if (t === "and") {
       // filler inside a spoken number ("a hundred and two") — skip
+      consumed++;
       continue;
     } else {
       break;
     }
+    consumed++;
   }
 
-  return matched ? result + current : null;
+  return matched ? { value: result + current, consumed } : null;
+}
+
+export interface GotoLineOptions {
+  /**
+   * Require the utterance to end with the number, so trailing words disqualify
+   * it ("move to line two of the protocol" is prose, not navigation). Used by
+   * the dictation command parser, where a false positive would silently
+   * redirect the note; the one-shot voice-goto mic stays lenient because the
+   * user has explicitly asked it for a line number.
+   */
+  strict?: boolean;
 }
 
 /**
@@ -87,7 +106,10 @@ function wordsToNumber(tokens: string[]): number | null {
  * a "go to line" command. The utterance must contain the word "line" followed
  * by a number (numeral or spoken words).
  */
-export function parseGotoLine(utterance: string): number | null {
+export function parseGotoLine(
+  utterance: string,
+  opts?: GotoLineOptions,
+): number | null {
   if (!utterance) return null;
 
   const text = utterance
@@ -103,7 +125,9 @@ export function parseGotoLine(utterance: string): number | null {
   const tail = m[1].trim();
 
   // Numerals first — the common case with smart_format ("go to line 12").
-  const digits = tail.match(/^#?\s*(\d{1,5})\b/);
+  const digits = tail.match(
+    opts?.strict ? /^#?\s*(\d{1,5})$/ : /^#?\s*(\d{1,5})\b/,
+  );
   if (digits) {
     const n = Number.parseInt(digits[1], 10);
     return n >= 1 ? n : null;
@@ -111,6 +135,8 @@ export function parseGotoLine(utterance: string): number | null {
 
   // Otherwise fold spoken number words.
   const tokens = tail.split(/[\s-]+/).filter(Boolean);
-  const n = wordsToNumber(tokens);
-  return n && n >= 1 ? n : null;
+  const folded = wordsToNumber(tokens);
+  if (!folded || folded.value < 1) return null;
+  if (opts?.strict && folded.consumed !== tokens.length) return null;
+  return folded.value;
 }

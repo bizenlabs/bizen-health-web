@@ -1,6 +1,6 @@
 // Spoken voice commands for dictation. A clinician can say "new line", "new
-// paragraph", "next line", "next section", "go to assessment", "scratch that",
-// or "undo" and
+// paragraph", "next line", "next section", "go to assessment", "go to line 12",
+// "scratch that", or "undo" and
 // have it become a structure/navigation/editing action instead of literal text.
 //
 // This module is the *pure* parser: it turns one finalised Deepgram utterance
@@ -24,6 +24,8 @@
 // with auto-punctuation OFF (see deepgram-client) and this parser turns the
 // spoken words into characters — exactly one of the two punctuates.
 
+import { parseGotoLine } from "./goto-line-command";
+
 export type VoiceCommand =
   | { kind: "newline" }
   | { kind: "paragraph" }
@@ -34,6 +36,10 @@ export type VoiceCommand =
   | { kind: "nextLine" }
   | { kind: "prevLine" }
   | { kind: "gotoSection"; target: string; raw: string }
+  // Jump the dictation point to a numbered visual line — the same numbering the
+  // editor's line ruler paints in its gutter. 1-based; the editor clamps a
+  // number past the end of the note to its last line.
+  | { kind: "gotoLine"; line: number }
   | { kind: "scratchThat" }
   | { kind: "undo" }
   // Table navigation/editing (Tier B — whole-utterance only). The editor maps
@@ -73,9 +79,12 @@ const TRAILING_PUNCT = /[.?!,]+$/;
 // utterance after filler/punctuation stripping; a match consumes the whole
 // utterance and emits no text (except gotoSection, which carries the raw text
 // so the editor can fall back to literal insertion when no section matches).
+// A `command` builder may return null when the pattern matched but the payload
+// didn't parse (e.g. "go to line" with no number) — matching then continues
+// with the remaining patterns, so the words end up as ordinary dictated text.
 const WHOLE_UTTERANCE: Array<{
   pattern: RegExp;
-  command: (m: RegExpMatchArray, raw: string) => VoiceCommand;
+  command: (m: RegExpMatchArray, raw: string) => VoiceCommand | null;
 }> = [
   { pattern: /^next section$/i, command: () => ({ kind: "nextSection" }) },
   {
@@ -103,6 +112,24 @@ const WHOLE_UTTERANCE: Array<{
     pattern:
       /^(?:(?:go|jump) to (?:the )?(?:next )?table|enter (?:the )?table|next table)$/i,
     command: () => ({ kind: "gotoTable" }),
+  },
+  // "go to line 12" / "line number twelve" — the numbered visual lines the
+  // editor's ruler paints. Listed before "go to <target>" so the number isn't
+  // captured as a section name (and before it can fall back to literal text).
+  // Number parsing (numerals or spoken words) is shared with the ruler's
+  // one-shot voice goto, via parseGotoLine.
+  //
+  // Two guards against dictated prose: a bare "line twelve" is NOT accepted —
+  // the navigation verb, or the explicit "line number", has to be there — and
+  // parsing is `strict`, so the number must end the utterance ("move to line
+  // two of the protocol" stays prose).
+  {
+    pattern:
+      /^(?:(?:go|jump|navigate|skip|move) to (?:the )?line|line number)\b(.*)$/i,
+    command: (m) => {
+      const line = parseGotoLine(`line ${m[1].trim()}`, { strict: true });
+      return line === null ? null : { kind: "gotoLine", line };
+    },
   },
   {
     pattern: /^(?:go|jump|navigate|skip) to (.{1,40})$/i,
@@ -264,7 +291,9 @@ function matchWholeUtterance(trimmed: string): VoiceCommand | null {
   const core = stripFiller(trimmed);
   for (const { pattern, command } of WHOLE_UTTERANCE) {
     const m = core.match(pattern);
-    if (m) return command(m, trimmed);
+    if (!m) continue;
+    const cmd = command(m, trimmed);
+    if (cmd) return cmd;
   }
   return null;
 }
