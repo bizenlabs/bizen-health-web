@@ -20,9 +20,30 @@ import {
 const LISTEN_URL = "wss://api.deepgram.com/v1/listen";
 
 // Cap the pending-audio buffer so it never grows unbounded if the WS never
-// opens. 500 frames × ~40 ms ≈ 20 s — plenty for a slow handshake.
-const MAX_PENDING_CHUNKS = 500;
+// opens. 1500 frames × ~40 ms ≈ 60 s at 1.3 KB/frame ≈ 1.9 MB — sized for a
+// reconnect gap (a lift, a tunnel, a cell handover), not just the handshake.
+const MAX_PENDING_CHUNKS = 1500;
 const KEEPALIVE_MS = 5000;
+// A handshake that never settles — captive portal, half-open link — would
+// otherwise leave connect() pending forever and the recorder stuck "starting".
+const CONNECT_TIMEOUT_MS = 10_000;
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 15_000;
+// Bounds how long we chase a connection that isn't coming back. At the delays
+// above this is roughly 90 s of retrying before the session is failed.
+const MAX_RECONNECT_ATTEMPTS = 10;
+// Ceiling on unsent bytes queued in the socket. Past this the uplink can't
+// keep up with 32 KB/s of PCM, so further frames go to `pending` (which drops
+// oldest-first) instead of inflating send latency without bound.
+const MAX_BUFFERED_BYTES = 1_000_000;
+
+// Close codes where reconnecting would fail identically — the request or the
+// credentials are wrong, not the network. Deepgram signals auth and
+// malformed-request failures with 1008, and protocol-level rejections with
+// 1002/1003. Everything else (1006 abnormal, 1011 server error, the 4xxx
+// application range) is treated as transient and retried; MAX_RECONNECT_
+// ATTEMPTS bounds the cost of guessing wrong.
+const NON_RETRYABLE_CLOSE_CODES = new Set([1002, 1003, 1008]);
 
 type DeepgramWord = {
   word: string;
@@ -58,6 +79,11 @@ export interface DeepgramStreamOptions {
   // Deepgram's auto-punctuation must be off — otherwise both fire and the text
   // ends up double-punctuated. Default false (auto-punctuation on).
   spokenPunctuation?: boolean;
+  // How hard to chase a dropped socket. Defaults to MAX_RECONNECT_ATTEMPTS,
+  // which suits a long dictation. Pass 0 for one-shot captures (a single word,
+  // a voice command) where the utterance is over in seconds and a retry loop
+  // would read as a hang — there, the first drop should surface immediately.
+  maxReconnectAttempts?: number;
 }
 
 // Deepgram caps key-term prompting at 500 tokens per request. We can't count
@@ -125,6 +151,16 @@ export function createDeepgramStream(
 ): TranscriptionStream {
   let ws: WebSocket | null = null;
   let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  // Set by close(); tells the close handler this teardown was ours and must
+  // not trigger a reconnect.
+  let closing = false;
+  // Consecutive failed reconnects. Reset on a successful open.
+  let attempt = 0;
+  // Held from connect() so a reconnect can re-mint a key — the ephemeral key
+  // is per-request, and the old one may well have expired during the outage.
+  let getTokenFn: (() => Promise<string>) | null = null;
+  let onlineHandler: (() => void) | null = null;
   const pending: Int16Array[] = [];
   const listeners = new Set<(e: TranscriptEvent) => void>();
   const emit = (e: TranscriptEvent) => listeners.forEach((l) => l(e));
@@ -147,9 +183,28 @@ export function createDeepgramStream(
     keepaliveTimer = setInterval(() => sendControl("KeepAlive"), KEEPALIVE_MS);
   }
 
+  // True when the socket's send queue is already deeper than the link is
+  // draining. Sending more would only add latency, so callers queue instead.
+  function isBackedUp(): boolean {
+    return (ws?.bufferedAmount ?? 0) > MAX_BUFFERED_BYTES;
+  }
+
+  // Queue a frame for later, dropping the oldest audio once the buffer is
+  // full. Newest-first is the right policy: after a long gap the recent words
+  // are the ones still worth transcribing.
+  function queue(chunk: Int16Array): void {
+    pending.push(chunk);
+    if (pending.length > MAX_PENDING_CHUNKS) {
+      pending.splice(0, pending.length - MAX_PENDING_CHUNKS);
+    }
+  }
+
   function flushPending(): void {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     while (pending.length > 0) {
+      // Congested link — leave the rest queued rather than piling it into the
+      // socket, and let the next sendPcm try again.
+      if (isBackedUp()) return;
       const chunk = pending.shift()!;
       ws.send(chunk.buffer);
     }
@@ -235,64 +290,190 @@ export function createDeepgramStream(
     // SpeechStarted / UtteranceEnd are ignored for now.
   }
 
+  // Opens one socket and wires it up. Resolves once the handshake completes;
+  // rejects on error or timeout without leaving a half-live socket behind.
+  // Used for both the initial connect and every reconnect.
+  async function openSocket(): Promise<void> {
+    if (!getTokenFn) throw new Error("stream not connected");
+    const token = await getTokenFn();
+    const socket = new WebSocket(
+      buildListenUrl(
+        opts.diarize,
+        opts.keyterms ?? [],
+        opts.language,
+        opts.spokenPunctuation ?? false,
+      ),
+      ["token", token],
+    );
+    socket.binaryType = "arraybuffer";
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        socket.onopen = null;
+        socket.onerror = null;
+        try {
+          socket.close();
+        } catch {
+          /* already dead */
+        }
+        reject(new Error("deepgram connection timed out"));
+      }, CONNECT_TIMEOUT_MS);
+      socket.onopen = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      socket.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error("deepgram socket error"));
+      };
+    });
+
+    ws = socket;
+    socket.onmessage = (ev) => {
+      if (typeof ev.data === "string") handleMessage(ev.data);
+    };
+    // Post-handshake errors are not surfaced here: a WebSocket always fires
+    // `close` after `error`, and handleClose is where the retry-or-fail
+    // decision lives. Emitting from both would double-report every blip.
+    socket.onerror = null;
+    socket.onclose = handleClose;
+
+    // Drain anything captured while the WS was opening (or during the outage
+    // this reconnect just ended), then begin keepalives so the stream survives
+    // any lull in speech.
+    flushPending();
+    startKeepalive();
+  }
+
+  function handleClose(ev: CloseEvent): void {
+    stopKeepalive();
+    ws = null;
+    const reason = ev.reason || `code ${ev.code}`;
+    if (closing) {
+      emit({ kind: "closed", reason });
+      return;
+    }
+    if (NON_RETRYABLE_CLOSE_CODES.has(ev.code)) {
+      giveUp(`deepgram rejected the stream (${reason})`);
+      return;
+    }
+    // Includes a clean 1000 we didn't ask for — Deepgram ending the stream on
+    // its own while the clinician is still dictating is exactly the case a
+    // reconnect exists to cover.
+    scheduleReconnect(reason);
+  }
+
+  function giveUp(message: string): void {
+    attempt = 0;
+    emit({ kind: "error", error: new Error(message), fatal: true });
+    emit({ kind: "closed", reason: message });
+  }
+
+  function scheduleReconnect(reason: string): void {
+    if (closing) return;
+    const maxAttempts = opts.maxReconnectAttempts ?? MAX_RECONNECT_ATTEMPTS;
+    if (attempt >= maxAttempts) {
+      giveUp(`lost connection to Deepgram (${reason})`);
+      return;
+    }
+    attempt += 1;
+    const backoff = Math.min(
+      RECONNECT_MAX_MS,
+      RECONNECT_BASE_MS * 2 ** (attempt - 1),
+    );
+    // Jitter so a clinic full of devices coming back on one flaky uplink
+    // doesn't retry in lockstep.
+    const delayMs = Math.round(backoff * (0.75 + Math.random() * 0.5));
+    emit({ kind: "reconnecting", attempt, delayMs });
+    reconnectTimer = setTimeout(() => void attemptReconnect(), delayMs);
+  }
+
+  async function attemptReconnect(): Promise<void> {
+    reconnectTimer = null;
+    if (closing || ws) return;
+    try {
+      await openSocket();
+      attempt = 0;
+      emit({ kind: "reconnected" });
+    } catch (err) {
+      if (closing) return;
+      scheduleReconnect(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // The OS says the network is back. Collapse whatever backoff is left and
+  // retry immediately — waiting out a 15 s timer when connectivity has
+  // demonstrably returned just extends the gap. The attempt counter resets
+  // because this is a real state change, not another blind retry.
+  function handleOnline(): void {
+    if (closing || ws || !reconnectTimer) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    attempt = 0;
+    void attemptReconnect();
+  }
+
   return {
     async connect({ getToken }: ConnectOptions) {
-      const token = await getToken();
-      ws = new WebSocket(
-        buildListenUrl(
-          opts.diarize,
-          opts.keyterms ?? [],
-          opts.language,
-          opts.spokenPunctuation ?? false,
-        ),
-        ["token", token],
-      );
-      ws.binaryType = "arraybuffer";
-
-      await new Promise<void>((resolve, reject) => {
-        if (!ws) return reject(new Error("socket not created"));
-        ws.onopen = () => resolve();
-        ws.onerror = () => reject(new Error("deepgram socket error"));
-      });
-
-      ws.onmessage = (ev) => {
-        if (typeof ev.data === "string") handleMessage(ev.data);
-      };
-      ws.onerror = () => {
-        emit({ kind: "error", error: new Error("deepgram socket error") });
-      };
-      ws.onclose = (ev) => {
-        stopKeepalive();
-        emit({ kind: "closed", reason: ev.reason || `code ${ev.code}` });
-        ws = null;
-      };
-
-      // Drain anything captured while the WS was opening, then begin
-      // keepalives so the stream survives any lull in speech.
-      flushPending();
-      startKeepalive();
+      closing = false;
+      attempt = 0;
+      getTokenFn = getToken;
+      // Let a first-connect failure propagate: start() turns it into a visible
+      // error rather than a silent retry loop before anything is recording.
+      await openSocket();
+      if (typeof window !== "undefined") {
+        onlineHandler = handleOnline;
+        window.addEventListener("online", onlineHandler);
+      }
     },
 
     sendPcm(chunk) {
-      if (ws?.readyState === WebSocket.OPEN) {
-        if (pending.length > 0) flushPending();
+      if (ws?.readyState === WebSocket.OPEN && !isBackedUp()) {
+        if (pending.length > 0) {
+          flushPending();
+          // flushPending may have stopped on backpressure. Queue behind what's
+          // left rather than jumping the line and delivering audio out of
+          // order.
+          if (pending.length > 0) {
+            queue(chunk);
+            return;
+          }
+        }
         ws.send(chunk.buffer);
         return;
       }
-      // WS still opening (or momentarily closed). Buffer so the first words
-      // aren't lost to the handshake window.
-      pending.push(chunk);
-      if (pending.length > MAX_PENDING_CHUNKS) {
-        pending.splice(0, pending.length - MAX_PENDING_CHUNKS);
-      }
+      // Socket opening, reconnecting, or congested. Buffer so the words spoken
+      // across the gap survive to be replayed.
+      queue(chunk);
     },
 
     async close() {
+      // Set first: ws.close() below fires handleClose, which must read this as
+      // a deliberate teardown and not queue a reconnect.
+      closing = true;
       stopKeepalive();
-      if (!ws) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (onlineHandler && typeof window !== "undefined") {
+        window.removeEventListener("online", onlineHandler);
+        onlineHandler = null;
+      }
+      getTokenFn = null;
+      if (!ws) {
+        // Closed mid-outage. Whatever is still buffered has nowhere to go —
+        // Deepgram is the only thing that could transcribe it.
+        pending.length = 0;
+        return;
+      }
       try {
+        // Hand over any buffered audio before signalling end-of-stream; the
+        // browser drains the send queue before the socket actually closes.
+        flushPending();
         sendControl("CloseStream");
       } finally {
+        pending.length = 0;
         ws.close();
         ws = null;
       }
