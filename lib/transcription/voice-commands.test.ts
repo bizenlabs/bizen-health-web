@@ -106,6 +106,79 @@ describe("parseUtterance — true positives (whole-utterance commands)", () => {
   });
 });
 
+describe("parseUtterance — go to line N", () => {
+  const line = (ops: VoiceOp[]) =>
+    ops.find((o) => o.type === "command" && o.command.kind === "gotoLine");
+
+  it("fires on the navigation-verb variants", () => {
+    for (const phrase of [
+      "go to line 12",
+      "jump to line 12",
+      "navigate to line 12",
+      "skip to line 12",
+      "move to line 12",
+      "go to the line 12",
+      "line number 12",
+    ]) {
+      expect(cmds(parseUtterance(phrase))).toEqual(["gotoLine"]);
+    }
+  });
+
+  it("carries the parsed 1-based line number", () => {
+    const ops = parseUtterance("go to line 12");
+    expect(ops).toHaveLength(1);
+    expect(ops[0].type === "command" && ops[0].command).toEqual({
+      kind: "gotoLine",
+      line: 12,
+    });
+  });
+
+  it("accepts spoken number words", () => {
+    expect(line(parseUtterance("go to line twelve"))).toBeDefined();
+    expect(
+      parseUtterance("go to line twenty three").flatMap((o) =>
+        o.type === "command" && o.command.kind === "gotoLine"
+          ? [o.command.line]
+          : [],
+      ),
+    ).toEqual([23]);
+  });
+
+  it("tolerates filler and smart_format punctuation", () => {
+    expect(cmds(parseUtterance("okay, go to line 4 please"))).toEqual([
+      "gotoLine",
+    ]);
+    expect(cmds(parseUtterance("Go to line 4."))).toEqual(["gotoLine"]);
+  });
+
+  it("wins over the section lookup, which would swallow the number", () => {
+    // Without the earlier gotoLine pattern this would be gotoSection "line 12"
+    // and fall back to literal text.
+    expect(cmds(parseUtterance("go to line 12"))).toEqual(["gotoLine"]);
+    expect(cmds(parseUtterance("go to assessment"))).toEqual(["gotoSection"]);
+  });
+
+  it("stays distinct from the relative line commands", () => {
+    expect(cmds(parseUtterance("go to the next line"))).toEqual(["nextLine"]);
+    expect(cmds(parseUtterance("go to previous line"))).toEqual(["prevLine"]);
+  });
+
+  it("does not fire on prose that merely mentions a line number", () => {
+    expect(cmds(parseUtterance("move to line two of the protocol"))).toEqual(
+      [],
+    );
+    expect(cmds(parseUtterance("we will go to line 3 of the ward"))).toEqual(
+      [],
+    );
+    expect(cmds(parseUtterance("second line therapy was started"))).toEqual([]);
+  });
+
+  it("falls through to text when no number follows", () => {
+    const ops = parseUtterance("go to line");
+    expect(cmds(ops)).toEqual(["gotoSection"]);
+  });
+});
+
 describe("parseUtterance — inline whitespace commands", () => {
   it("fires 'new line' as a standalone utterance", () => {
     expect(cmds(parseUtterance("new line"))).toEqual(["newline"]);
@@ -259,6 +332,7 @@ describe("parseUtterance — every command survives a trailing period / merge", 
     { phrase: "next line", kind: "nextLine" },
     { phrase: "previous line", kind: "prevLine" },
     { phrase: "go to assessment", kind: "gotoSection" },
+    { phrase: "go to line 12", kind: "gotoLine" },
     { phrase: "scratch that", kind: "scratchThat" },
     { phrase: "undo", kind: "undo" },
     { phrase: "go to table", kind: "gotoTable" },

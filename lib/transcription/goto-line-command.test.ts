@@ -52,3 +52,25 @@ describe("parseGotoLine — non-matches (must return null)", () => {
     expect(parseGotoLine("")).toBeNull();
   });
 });
+
+describe("parseGotoLine — strict mode (dictation commands)", () => {
+  it("still parses a tail that is nothing but the number", () => {
+    expect(parseGotoLine("go to line 12", { strict: true })).toBe(12);
+    expect(parseGotoLine("line number five", { strict: true })).toBe(5);
+    expect(parseGotoLine("line one hundred and two", { strict: true })).toBe(
+      102,
+    );
+    expect(parseGotoLine("line #9", { strict: true })).toBe(9);
+  });
+
+  it("rejects a number followed by more words", () => {
+    expect(
+      parseGotoLine("line two of the protocol", { strict: true }),
+    ).toBeNull();
+    expect(parseGotoLine("line 12 of the report", { strict: true })).toBeNull();
+  });
+
+  it("leaves the lenient default unchanged", () => {
+    expect(parseGotoLine("line two of the protocol")).toBe(2);
+  });
+});

@@ -83,7 +83,7 @@ import { DictationExportMenu, type ExportOrg } from "./dictation-export-menu";
 import { DictationTitle } from "./dictation-title";
 import { DictationCaret, dictationCaretKey } from "./dictation-caret";
 import { DictationVariableGhost } from "./dictation-variable-ghost";
-import { EditorLineRuler } from "./editor-line-ruler";
+import { EditorLineRuler, type LineRulerHandle } from "./editor-line-ruler";
 import { EmptySectionDimmer } from "./empty-section-dimmer";
 import {
   applyTableCellPlaceholders,
@@ -701,6 +701,11 @@ export function DictationEditor({
   // Range of the most recently committed dictation run, so "scratch that" can
   // remove it. Cleared whenever a structural/navigation command moves the caret.
   const lastInsertRangeRef = useRef<{ from: number; to: number } | null>(null);
+  // The line ruler's measured geometry, so a spoken "go to line 12" can resolve
+  // a visual line number to a doc position. Line numbers are a rendered-layout
+  // fact (wrapping, headings, table cells), not a document one — only the ruler
+  // knows them.
+  const lineRulerRef = useRef<LineRulerHandle>(null);
 
   // Strip the template's `[placeholder]` / `(instruction)` helper text out of
   // the seeded Markdown and extract the bracket hints. The hints are rendered
@@ -1123,6 +1128,27 @@ export function DictationEditor({
           } else {
             // No section matched — don't swallow the words; treat as dictation.
             insertText(command.raw);
+          }
+          break;
+        }
+        // Jump to a numbered line in the ruler's gutter. The ruler measures the
+        // rendered layout, so this lands on the *visual* row the clinician can
+        // see — the number they read off the gutter is the number they say. A
+        // number past the end clamps to the last line (flagged in the flash);
+        // an unmeasurable ruler (mid-mount, or the Transcript tab, where the
+        // editor is hidden and has no geometry) leaves the point where it is.
+        case "gotoLine": {
+          const hit = lineRulerRef.current?.resolveLine(command.line);
+          if (hit) {
+            insertPosRef.current = Math.min(Math.max(hit.pos, 1), docMax());
+            lastInsertRangeRef.current = null;
+            const clamped = hit.line !== command.line;
+            flashCommand(
+              clamped ? `→ Line ${hit.line} (last)` : `→ Line ${hit.line}`,
+              clamped ? "warn" : "info",
+            );
+          } else {
+            flashCommand(`Can't find line ${command.line}`, "warn");
           }
           break;
         }
@@ -1905,6 +1931,7 @@ export function DictationEditor({
                 editor={editor}
                 editable={phase === "editing" || paused}
                 allowVoice={phase === "editing"}
+                ref={lineRulerRef}
               >
                 <EditorContent editor={editor} />
               </EditorLineRuler>
@@ -2054,6 +2081,7 @@ const COMMAND_REFERENCE: { group: string; phrases: string[] }[] = [
       "next section",
       "previous section",
       "go to <section>",
+      "go to line <n>",
     ],
   },
   { group: "Editing", phrases: ["scratch that", "undo"] },
