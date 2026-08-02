@@ -16,7 +16,11 @@ import type {
 import { type AudioCapture, createAudioCapture } from "./audio-capture";
 import { createDeepgramStream } from "./deepgram-client";
 import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "./languages";
-import type { TranscriptEvent, TranscriptionStream } from "./types";
+import type {
+  ConnectionState,
+  TranscriptEvent,
+  TranscriptionStream,
+} from "./types";
 
 // Orchestrates one browser-side transcription session, shared by the encounter
 // recorder and the dictation page. Audio streams browser → Deepgram directly;
@@ -36,6 +40,11 @@ export type LiveSegment = SegmentInput;
 
 export interface UseTranscriptionResult {
   state: RecorderState;
+  // Whether audio is currently reaching Deepgram. `state` stays "recording"
+  // through a network drop — the mic is still live and audio is buffered — so
+  // the UI needs this to tell the clinician nothing is being transcribed right
+  // now. Only after the client gives up retrying does `state` become "error".
+  connection: ConnectionState;
   error: string | null;
   transcriptionId: string | null;
   segments: LiveSegment[];
@@ -92,12 +101,23 @@ export interface UseTranscriptionResult {
 
 const FLUSH_BATCH = 5;
 const FLUSH_IDLE_MS = 4000;
+// A failed flush re-queues its batch and retries on this backoff rather than
+// waiting for the next final — during an outage there may not be another one.
+const FLUSH_RETRY_BASE_MS = 1000;
+const FLUSH_RETRY_MAX_MS = 30_000;
+// Failures tolerated before the error surfaces to the clinician. Below this a
+// blip stays invisible; above it they need to know the note isn't saving.
+const FLUSH_RETRIES_BEFORE_ALERT = 3;
+// Attempts the final flush gets during stop(), so a stop that lands mid-blip
+// doesn't drop the last utterances.
+const STOP_FLUSH_ATTEMPTS = 3;
 // Matches the Deepgram stream + capture sample rate; used to convert streamed
 // PCM sample counts into billable audio seconds.
 const SAMPLE_RATE = 16000;
 
 export function useTranscription(): UseTranscriptionResult {
   const [state, setState] = useState<RecorderState>("idle");
+  const [connection, setConnection] = useState<ConnectionState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
   const [segments, setSegments] = useState<LiveSegment[]>([]);
@@ -142,6 +162,32 @@ export function useTranscription(): UseTranscriptionResult {
   const pendingRef = useRef<LiveSegment[]>([]);
   const flushingRef = useRef<boolean>(false);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Consecutive failed flushes — drives the retry backoff and decides when the
+  // failure is worth showing. Reset on any successful flush.
+  const flushFailuresRef = useRef<number>(0);
+  // Lets the retry timer re-enter flush without flush depending on itself.
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+
+  // Declared ahead of the event handler so a fatal stream error can shut the
+  // microphone down rather than leaving it capturing into a dead session.
+  const teardown = useCallback(async () => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    try {
+      await captureRef.current?.stop();
+    } catch {
+      /* best effort */
+    }
+    try {
+      await streamRef.current?.close();
+    } catch {
+      /* best effort */
+    }
+    captureRef.current = null;
+    streamRef.current = null;
+  }, []);
 
   const clearFlushTimer = useCallback(() => {
     if (flushTimerRef.current) {
@@ -150,8 +196,9 @@ export function useTranscription(): UseTranscriptionResult {
     }
   }, []);
 
-  // Sends whatever finals are buffered. On failure the batch is re-queued so
-  // the next flush (or stop) retries it.
+  // Sends whatever finals are buffered. On failure the batch is re-queued and
+  // a backoff retry is scheduled — the segments stay in memory until they
+  // land, so a blip costs latency rather than transcript.
   const flush = useCallback(async () => {
     if (flushingRef.current) return;
     const id = idRef.current;
@@ -160,18 +207,38 @@ export function useTranscription(): UseTranscriptionResult {
     const batch = pendingRef.current;
     pendingRef.current = [];
     flushingRef.current = true;
+    let failed = false;
     try {
       const res = await appendSegmentsAction(id, batch);
       if (!res.ok) {
+        failed = true;
         pendingRef.current = [...batch, ...pendingRef.current];
-        setError(res.error);
+        if (flushFailuresRef.current + 1 >= FLUSH_RETRIES_BEFORE_ALERT) {
+          setError(res.error);
+        }
       }
     } catch {
+      failed = true;
       pendingRef.current = [...batch, ...pendingRef.current];
     } finally {
       flushingRef.current = false;
     }
+    if (!failed) {
+      flushFailuresRef.current = 0;
+      return;
+    }
+    flushFailuresRef.current += 1;
+    const delay = Math.min(
+      FLUSH_RETRY_MAX_MS,
+      FLUSH_RETRY_BASE_MS * 2 ** (flushFailuresRef.current - 1),
+    );
+    clearFlushTimer();
+    flushTimerRef.current = setTimeout(() => void flushRef.current(), delay);
   }, [clearFlushTimer]);
+
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
 
   // Billable audio seconds for this sitting: the larger of Deepgram's reported
   // duration and what we streamed, rounded to milliseconds.
@@ -191,10 +258,30 @@ export function useTranscription(): UseTranscriptionResult {
     (e: TranscriptEvent) => {
       if (e.kind === "error") {
         setError(e.error.message);
-        setState("error");
+        // Non-fatal errors are informational — the client is still recovering,
+        // so the session stays live and the mic keeps buffering.
+        if (e.fatal) {
+          setState("error");
+          setConnection("idle");
+          // The stream has given up; capturing on would leave the mic (and its
+          // recording indicator) live with nothing consuming the audio. The
+          // backend session stays IN_PROGRESS so it can be resumed.
+          void teardown();
+        }
+        return;
+      }
+      if (e.kind === "reconnecting") {
+        // Audio is still being captured and buffered; only the uplink is down.
+        // Leave `state` alone so the recorder doesn't look stopped.
+        setConnection("reconnecting");
+        return;
+      }
+      if (e.kind === "reconnected") {
+        setConnection("online");
         return;
       }
       if (e.kind === "closed") {
+        setConnection("idle");
         return;
       }
       if (e.kind === "metadata") {
@@ -230,24 +317,8 @@ export function useTranscription(): UseTranscriptionResult {
         scheduleIdleFlush();
       }
     },
-    [flush, scheduleIdleFlush],
+    [flush, scheduleIdleFlush, teardown],
   );
-
-  const teardown = useCallback(async () => {
-    clearFlushTimer();
-    try {
-      await captureRef.current?.stop();
-    } catch {
-      /* best effort */
-    }
-    try {
-      await streamRef.current?.close();
-    } catch {
-      /* best effort */
-    }
-    captureRef.current = null;
-    streamRef.current = null;
-  }, [clearFlushTimer]);
 
   const start = useCallback(
     async (
@@ -271,6 +342,7 @@ export function useTranscription(): UseTranscriptionResult {
       pausedRef.current = false;
       setError(null);
       setState("starting");
+      setConnection("connecting");
       setSegments(seed);
       setPartial(null);
       pendingRef.current = [];
@@ -331,10 +403,12 @@ export function useTranscription(): UseTranscriptionResult {
           },
         });
         setState("recording");
+        setConnection("online");
       } catch (err) {
         liveRef.current = false;
         setError(err instanceof Error ? err.message : String(err));
         setState("error");
+        setConnection("idle");
         await teardown();
         const id = idRef.current;
         if (id) void failTranscriptionAction(id, "failed to start recording");
@@ -372,6 +446,7 @@ export function useTranscription(): UseTranscriptionResult {
       if (!id || !input || !liveRef.current) return;
       swappingRef.current = true;
       setState("starting");
+      setConnection("connecting");
       setPartial(null);
       // Persist whatever's buffered before tearing the old pipe down, then
       // drop the old capture + socket. The session id and segments survive.
@@ -414,11 +489,13 @@ export function useTranscription(): UseTranscriptionResult {
         // Land back on whatever the clinician chose. Only resume() moves a
         // paused session to "recording"; a reconnect never does.
         setState(pausedRef.current ? "paused" : "recording");
+        setConnection("online");
       } catch (err) {
         // Leave the session IN_PROGRESS (don't fail it) so the clinician can
         // pick another mic and try again, or resume it in a later sitting.
         setError(err instanceof Error ? err.message : String(err));
         setState("error");
+        setConnection("idle");
         await teardown();
       } finally {
         swappingRef.current = false;
@@ -435,8 +512,21 @@ export function useTranscription(): UseTranscriptionResult {
     liveRef.current = false;
     pausedRef.current = false;
     setState("stopping");
+    setConnection("idle");
     await teardown();
-    await flush();
+    // Retry the final flush: a stop that lands during a network blip would
+    // otherwise drop the last utterances, and there's no later flush to catch
+    // them once the session is completed.
+    for (let i = 0; i < STOP_FLUSH_ATTEMPTS; i++) {
+      await flush();
+      if (pendingRef.current.length === 0) break;
+      if (i < STOP_FLUSH_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, FLUSH_RETRY_BASE_MS * 2 ** i));
+      }
+    }
+    // Drop the backoff retry the last flush may have queued — the session is
+    // about to be completed and a late append would be rejected.
+    clearFlushTimer();
     const id = idRef.current;
     if (!id) {
       setState("idle");
@@ -454,7 +544,7 @@ export function useTranscription(): UseTranscriptionResult {
     setError(res.error);
     setState("error");
     return null;
-  }, [flush, teardown, recordedSeconds]);
+  }, [flush, teardown, recordedSeconds, clearFlushTimer]);
 
   // Read straight off the capture each frame — no state, no re-render. Returns
   // 0 whenever nothing is capturing.
@@ -499,6 +589,7 @@ export function useTranscription(): UseTranscriptionResult {
 
   return {
     state,
+    connection,
     error,
     transcriptionId,
     segments,

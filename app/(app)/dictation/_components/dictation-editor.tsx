@@ -557,6 +557,7 @@ export function DictationEditor({
   const exportOrg = buildExportOrg(org, orgHasLogo);
   const {
     state,
+    connection,
     error,
     segments,
     partial,
@@ -632,6 +633,11 @@ export function DictationEditor({
       : "recording";
 
   const paused = state === "paused";
+  // The socket dropped mid-dictation and is being retried. The mic stays live
+  // and audio is buffered throughout, so this warns rather than stops.
+  const reconnecting =
+    connection === "reconnecting" &&
+    (state === "recording" || state === "paused");
 
   // Active-recording elapsed time — counts while the mic is live, freezes (not
   // resets) on pause, and resumes from where it left off.
@@ -1810,20 +1816,28 @@ export function DictationEditor({
                 "size-1.5 rounded-full",
                 paused
                   ? "bg-amber-500"
-                  : micMuted
-                    ? "bg-amber-500"
-                    : "animate-pulse bg-red-500",
+                  : reconnecting
+                    ? "animate-pulse bg-amber-500"
+                    : micMuted
+                      ? "bg-amber-500"
+                      : "animate-pulse bg-red-500",
               )}
             />
             <span
               className={clsx(
                 "font-mono text-[10px] font-medium tracking-[0.2em] uppercase",
-                !paused && micMuted
+                !paused && (reconnecting || micMuted)
                   ? "text-amber-600 dark:text-amber-400"
                   : "text-zinc-400 dark:text-zinc-500",
               )}
             >
-              {paused ? "Paused" : micMuted ? "No signal" : "Recording"}
+              {paused
+                ? "Paused"
+                : reconnecting
+                  ? "Reconnecting"
+                  : micMuted
+                    ? "No signal"
+                    : "Recording"}
             </span>
             <span
               aria-hidden="true"
@@ -1850,6 +1864,20 @@ export function DictationEditor({
               </span>
             ) : null}
           </div>
+        ) : null}
+
+        {/* The socket is down but the mic is not. Say so explicitly — the
+          transcript freezing mid-sentence otherwise reads as the app having
+          stopped listening, and the clinician stops dictating for no reason. */}
+        {reconnecting ? (
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300"
+          >
+            Connection lost — reconnecting. Keep dictating: your audio is being
+            buffered and will be transcribed as soon as the connection is back.
+          </p>
         ) : null}
 
         {error || resumeError ? (

@@ -64,7 +64,12 @@ export function useWordCapture(): UseWordCapture {
     partialRef.current = "";
     setState("recording");
     try {
-      const stream = createDeepgramStream({ diarize: false });
+      // One word, a couple of seconds — a dropped socket is better surfaced
+      // straight away than chased through a retry loop.
+      const stream = createDeepgramStream({
+        diarize: false,
+        maxReconnectAttempts: 0,
+      });
       streamRef.current = stream;
       stream.on((e) => {
         if (e.kind === "final") {

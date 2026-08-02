@@ -17,13 +17,23 @@ export function TranscriptionRecorder({
 }) {
   const router = useRouter();
   const { keyterms } = useDictionary();
-  const { state, error, segments, partial, start, pause, resume, stop } =
-    useTranscription();
+  const {
+    state,
+    connection,
+    error,
+    segments,
+    partial,
+    start,
+    pause,
+    resume,
+    stop,
+  } = useTranscription();
 
   const recording = state === "recording";
   const paused = state === "paused";
   const live = recording || paused;
   const busy = state === "starting" || state === "stopping";
+  const reconnecting = live && connection === "reconnecting";
 
   async function handleStart() {
     await start({ mode: "ENCOUNTER", encounterId }, { keyterms, language });
@@ -43,9 +53,11 @@ export function TranscriptionRecorder({
         ? "Saving…"
         : paused
           ? "Paused"
-          : recording
-            ? "Recording…"
-            : "New transcription";
+          : reconnecting
+            ? "Reconnecting…"
+            : recording
+              ? "Recording…"
+              : "New transcription";
 
   return (
     <div className="rounded-md border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
@@ -53,6 +65,8 @@ export function TranscriptionRecorder({
         <div className="flex items-center gap-2">
           {paused ? (
             <span className="h-2 w-2 rounded-full bg-amber-500" />
+          ) : reconnecting ? (
+            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
           ) : recording ? (
             <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
           ) : null}
@@ -100,6 +114,17 @@ export function TranscriptionRecorder({
           </button>
         )}
       </div>
+
+      {reconnecting ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          Connection lost — reconnecting. Keep talking; audio is being buffered
+          and will be transcribed once the connection is back.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>

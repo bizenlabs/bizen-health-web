@@ -18,14 +18,24 @@ export function DictatableNotesField({
 }) {
   const [value, setValue] = useState(defaultValue);
   const { keyterms } = useDictionary();
-  const { state, error, segments, partial, start, pause, resume, stop } =
-    useTranscription();
+  const {
+    state,
+    connection,
+    error,
+    segments,
+    partial,
+    start,
+    pause,
+    resume,
+    stop,
+  } = useTranscription();
   const appendedRef = useRef(0);
 
   const recording = state === "recording";
   const paused = state === "paused";
   const live = recording || paused;
   const busy = state === "starting" || state === "stopping";
+  const reconnecting = live && connection === "reconnecting";
 
   // Append each newly finalised segment into the textarea.
   useEffect(() => {
@@ -85,11 +95,17 @@ export function DictatableNotesField({
             className={
               paused
                 ? "h-1.5 w-1.5 rounded-full bg-amber-500"
-                : "h-1.5 w-1.5 animate-pulse rounded-full bg-red-500"
+                : reconnecting
+                  ? "h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500"
+                  : "h-1.5 w-1.5 animate-pulse rounded-full bg-red-500"
             }
           />
           {paused ? (
             "Paused — mic muted."
+          ) : reconnecting ? (
+            <span className="text-amber-700 dark:text-amber-400">
+              Reconnecting — keep talking, audio is being buffered.
+            </span>
           ) : (
             <>
               Listening…{" "}

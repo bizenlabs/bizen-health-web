@@ -75,7 +75,12 @@ export function useVoiceGoto(onLine: (line: number) => void): UseVoiceGoto {
     setPartial("");
     setState("listening");
     try {
-      const stream = createDeepgramStream({ diarize: false });
+      // A single spoken command — surface a dropped socket immediately rather
+      // than retrying past the moment the command was useful.
+      const stream = createDeepgramStream({
+        diarize: false,
+        maxReconnectAttempts: 0,
+      });
       streamRef.current = stream;
       stream.on((e) => {
         if (e.kind === "final") {
