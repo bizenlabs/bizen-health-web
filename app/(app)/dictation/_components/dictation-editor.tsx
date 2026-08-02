@@ -665,9 +665,16 @@ export function DictationEditor({
     }
   }, [hasLabels, devices, setSelectedDeviceId]);
 
+  // A setting that only takes effect on a fresh Deepgram stream (the mic, or
+  // spoken punctuation) was changed while the session was paused. Reconnecting
+  // there would re-acquire the microphone behind the clinician's back, so the
+  // change waits here and handleSessionResume applies it on the way back up.
+  const pendingReconnectRef = useRef(false);
+
   // Pick a microphone from the editor. Persist it so the next sitting (Resume
   // remounts the page) starts on it, and — if recording right now — swap the
-  // live session onto it without ending the dictation.
+  // live session onto it without ending the dictation. While paused the picker
+  // just records the choice; the swap happens on resume.
   const handleDeviceChange = useCallback(
     (deviceId: string) => {
       setSelectedDeviceId(deviceId);
@@ -676,8 +683,10 @@ export function DictationEditor({
       } catch {
         /* sessionStorage unavailable */
       }
-      if (state === "recording" || state === "paused") {
+      if (state === "recording") {
         void switchDevice(deviceId);
+      } else if (state === "paused") {
+        pendingReconnectRef.current = true;
       }
     },
     [setSelectedDeviceId, state, switchDevice],
@@ -1018,13 +1027,17 @@ export function DictationEditor({
   // Toggle spoken punctuation. Besides the client-side replacement it's also a
   // Deepgram connection parameter (auto-punctuation goes off with it on), so a
   // live session reconnects on the current mic to apply it — the same path as
-  // a mic switch, so at most a beat of audio around the swap is lost.
+  // a mic switch, so at most a beat of audio around the swap is lost. Paused
+  // sessions defer that reconnect: flipping a setting must not put the mic
+  // back on air, which is what the clinician saw before.
   const handleTogglePunctuation = useCallback(() => {
     const next = !punctuationOnRef.current;
     setPunctuationOn(next);
     setSpokenPunctuation(next);
-    if (state === "recording" || state === "paused") {
+    if (state === "recording") {
       void switchDevice(selectedDeviceId ?? null);
+    } else if (state === "paused") {
+      pendingReconnectRef.current = true;
     }
   }, [setSpokenPunctuation, state, switchDevice, selectedDeviceId]);
   useEffect(() => {
@@ -1508,6 +1521,13 @@ export function DictationEditor({
       partialRangeRef.current = null;
     }
     resume();
+    // A mic or spoken-punctuation change made during the pause was held back;
+    // apply it now that the clinician has asked to go back on air. Resuming
+    // first means the rebuilt stream comes up recording rather than paused.
+    if (pendingReconnectRef.current) {
+      pendingReconnectRef.current = false;
+      void switchDevice(selectedDeviceId ?? null);
+    }
   }
 
   // Resume a finalised dictation. Reopen it server-side, persist the current
@@ -1626,6 +1646,7 @@ export function DictationEditor({
                     onToggle={() => setVoiceCommandsOn((v) => !v)}
                     punctuation={punctuationOn}
                     onTogglePunctuation={handleTogglePunctuation}
+                    paused={paused}
                   />
                   {paused ? (
                     <button
@@ -2135,11 +2156,15 @@ function VoiceCommandControl({
   onToggle,
   punctuation,
   onTogglePunctuation,
+  paused,
 }: {
   enabled: boolean;
   onToggle: () => void;
   punctuation: boolean;
   onTogglePunctuation: () => void;
+  // Spoken punctuation needs a fresh Deepgram stream, which is deferred while
+  // paused — say so, rather than leaving the toggle looking inert.
+  paused: boolean;
 }) {
   return (
     <Popover className="relative">
@@ -2196,6 +2221,11 @@ function VoiceCommandControl({
               ? "Say “period”, “comma”, etc. Automatic punctuation is off while this is on."
               : "Say “period”, “comma”, etc. Off by default — automatic punctuation handles it."}
           </p>
+          {paused ? (
+            <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-500">
+              Takes effect when you resume.
+            </p>
+          ) : null}
         </div>
       </PopoverPanel>
     </Popover>
