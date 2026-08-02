@@ -7,8 +7,22 @@ export type TranscriptEvent =
   // Deepgram's end-of-stream Metadata: the billable audio duration it
   // processed and its request id, surfaced for usage metering + reconciliation.
   | { kind: "metadata"; durationSeconds: number; requestId?: string }
-  | { kind: "error"; error: Error }
+  // `fatal` means the stream has given up — the session is over and the error
+  // is the clinician's to act on. A non-fatal error is informational; the
+  // client is still trying to recover.
+  | { kind: "error"; error: Error; fatal: boolean }
+  // The socket dropped and a reconnect is queued. Audio keeps being captured
+  // and buffered throughout, so this is a warning, not a stop.
+  | { kind: "reconnecting"; attempt: number; delayMs: number }
+  // The socket is back and the buffered audio has been replayed.
+  | { kind: "reconnected" }
   | { kind: "closed"; reason: string };
+
+// Whether audio is currently reaching Deepgram. Distinct from the recorder's
+// own state: a session can be "recording" while the connection is
+// "reconnecting" — the mic is live and buffering, nothing is being transcribed
+// yet.
+export type ConnectionState = "idle" | "connecting" | "online" | "reconnecting";
 
 export interface ConnectOptions {
   // Resolves an ephemeral Deepgram key (minted server-side per session).
