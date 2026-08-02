@@ -71,6 +71,10 @@ import {
 } from "@/lib/template-variables";
 import type { TranscriptionMode } from "@/lib/transcriptions";
 import {
+  maxSequence,
+  selectFreshSegments,
+} from "@/lib/transcription/segment-reconcile";
+import {
   type LiveSegment,
   useTranscription,
 } from "@/lib/transcription/use-transcription";
@@ -708,8 +712,15 @@ export function DictationEditor({
   const insertPosRef = useRef<number | null>(null);
   // How many of `segments` have already been inserted into the editor. Seeded
   // to `initialSegments.length` because those land in the editor as part of
-  // the seeded Markdown, not via the stream.
+  // the seeded Markdown, not via the stream. Safe as a plain count only against
+  // the live `segments` array, which this client appends to in order.
   const processedSegCountRef = useRef<number>(0);
+  // The highest segment sequence already inserted. Sequence is the stable
+  // identity of an utterance; a positional count is not, because the server may
+  // return segments in a different order or (before the append endpoint was
+  // made idempotent) more of them than this client produced. Anything read back
+  // from the server is reconciled against this, never sliced by count.
+  const processedMaxSeqRef = useRef<number>(-1);
   // Where the current tentative (italic) partial text lives so it can be
   // deleted before the next tick replaces it.
   const partialRangeRef = useRef<{ from: number; length: number } | null>(null);
@@ -988,6 +999,7 @@ export function DictationEditor({
     // Seed segments already live in the editor as part of the seeded markdown
     // — mark them processed so the stream doesn't double-insert them.
     processedSegCountRef.current = initialSegments.length;
+    processedMaxSeqRef.current = maxSequence(initialSegments);
     resetHistory(editor);
     initRef.current = true;
   }, [
@@ -1362,6 +1374,10 @@ export function DictationEditor({
     if (segments.length > processedSegCountRef.current) {
       const newSegs = segments.slice(processedSegCountRef.current);
       processedSegCountRef.current = segments.length;
+      processedMaxSeqRef.current = maxSequence(
+        newSegs,
+        processedMaxSeqRef.current,
+      );
       flushSegments(newSegs);
     }
 
@@ -1490,14 +1506,26 @@ export function DictationEditor({
       }
       // Insert anything finalised but not yet picked up by the stream effect —
       // including a trailing command (e.g. "next section") said just before Stop.
+      //
+      // Selected by sequence, never by slicing at a positional count. `result`
+      // comes back from the server, so its array need not line up index-for-
+      // index with what this client inserted: it carries the seeded segments of
+      // a resumed dictation, it is ordered by the server, and a retried append
+      // could historically land the same utterance twice. Slicing it at a count
+      // derived from the live array dumped a misaligned chunk of already-
+      // inserted text into the note.
       const finalSegments = result?.segments ?? segments;
-      if (
-        finalSegments.length > processedSegCountRef.current &&
-        insertPosRef.current !== null
-      ) {
-        const newSegs = finalSegments.slice(processedSegCountRef.current);
+      const fresh = selectFreshSegments(
+        finalSegments,
+        processedMaxSeqRef.current,
+      );
+      if (fresh.length > 0 && insertPosRef.current !== null) {
         processedSegCountRef.current = finalSegments.length;
-        flushSegments(newSegs);
+        processedMaxSeqRef.current = maxSequence(
+          fresh,
+          processedMaxSeqRef.current,
+        );
+        flushSegments(fresh);
       }
       resetHistory(editor);
       void doSave(editor.getMarkdown());

@@ -284,6 +284,13 @@ export function useTranscription(): UseTranscriptionResult {
         // Audio is still being captured and buffered; only the uplink is down.
         // Leave `state` alone so the recorder doesn't look stopped.
         setConnection("reconnecting");
+        // Drop the in-flight partial, the same way pause() does. The stream
+        // that produced it is gone and will never finalise it, and the audio
+        // behind it was already handed to the dead socket so it is not among
+        // what gets replayed. Leaving the tentative text on screen through an
+        // outage that can run a minute invites the clinician to edit inside a
+        // span the editor still believes is its own to delete.
+        setPartial(null);
         return;
       }
       if (e.kind === "reconnected") {
