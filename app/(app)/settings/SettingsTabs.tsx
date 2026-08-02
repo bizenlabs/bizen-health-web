@@ -10,15 +10,18 @@ import clsx from "clsx";
 const TABS = [
   { href: "/settings", label: "General", exact: true, adminOnly: false },
   { href: "/settings/practice", label: "Practice", adminOnly: true },
-  {
-    href: "/settings/clinical-setup",
-    label: "Clinical setup",
-    adminOnly: true,
-  },
+  // FIRST-RELEASE: clinical setup (visit/encounter types) only configures
+  // encounters, which are out of the dictation-only release.
+  // {
+  //   href: "/settings/clinical-setup",
+  //   label: "Clinical setup",
+  //   adminOnly: true,
+  // },
   { href: "/settings/templates", label: "Note templates", adminOnly: true },
   { href: "/settings/vocabulary", label: "Vocabulary", adminOnly: true },
   { href: "/settings/transcription", label: "Transcription", adminOnly: true },
-  { href: "/settings/scheduling", label: "Scheduling", adminOnly: true },
+  // FIRST-RELEASE: re-enable alongside /appointments.
+  // { href: "/settings/scheduling", label: "Scheduling", adminOnly: true },
   { href: "/settings/staff", label: "Staff", adminOnly: true },
 ];
 

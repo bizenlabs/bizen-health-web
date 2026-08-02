@@ -2,24 +2,29 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getIdentifierTypes, getPatient } from "@/lib/patients";
-import { listEncountersForPatient } from "@/lib/encounters";
-import {
-  listAppointmentsForPatient,
-  listRecurrencesForPatient,
-  type AppointmentDetail,
-  type AppointmentRecurrence,
-} from "@/lib/appointments";
-import { listObservationsForPatient } from "@/lib/observations";
 import { listTranscriptionsForPatient } from "@/lib/transcriptions";
 import { ApiError } from "@/lib/api";
 import { PatientAvatar } from "@/components/patient-avatar";
-import { AppointmentsSection } from "../_components/appointments-section";
 import { DictationsSection } from "../_components/dictations-section";
-import { EncountersSection } from "../_components/encounters-section";
 import { LifecycleActions } from "../_components/lifecycle-actions";
 import { ManageIdentifiers } from "../_components/manage-identifiers";
-import { TimelineSection } from "../_components/timeline-section";
-import { VitalsTrendSection } from "../_components/vitals-trend-section";
+
+// FIRST-RELEASE: the dictation-only release shows demographics, identifiers and
+// dictations on this page. Encounters, observations/vitals and appointments come
+// back with their features — restore these imports together with the sections
+// commented out in the body below.
+// import { listEncountersForPatient } from "@/lib/encounters";
+// import {
+//   listAppointmentsForPatient,
+//   listRecurrencesForPatient,
+//   type AppointmentDetail,
+//   type AppointmentRecurrence,
+// } from "@/lib/appointments";
+// import { listObservationsForPatient } from "@/lib/observations";
+// import { AppointmentsSection } from "../_components/appointments-section";
+// import { EncountersSection } from "../_components/encounters-section";
+// import { TimelineSection } from "../_components/timeline-section";
+// import { VitalsTrendSection } from "../_components/vitals-trend-section";
 
 export default async function PatientDetailPage({
   params,
@@ -40,38 +45,41 @@ export default async function PatientDetailPage({
     throw err;
   }
   const identifierTypes = patient.voided ? [] : await getIdentifierTypes();
-  const [encounters, observationsPage] = patient.voided
-    ? [
-        {
-          content: [] as Awaited<
-            ReturnType<typeof listEncountersForPatient>
-          >["content"],
-        },
-        {
-          content: [] as Awaited<
-            ReturnType<typeof listObservationsForPatient>
-          >["content"],
-          totalElements: 0,
-        },
-      ]
-    : await Promise.all([
-        listEncountersForPatient(patient.id, { size: 20 }),
-        listObservationsForPatient(patient.id, { size: 200 }),
-      ]);
-  const [appointmentsPage, recurrences] = patient.voided
-    ? [{ content: [] as AppointmentDetail[] }, [] as AppointmentRecurrence[]]
-    : await Promise.all([
-        listAppointmentsForPatient(patient.id, { size: 20 }),
-        listRecurrencesForPatient(patient.id),
-      ]);
   const dictations = patient.voided
     ? []
     : await listTranscriptionsForPatient(patient.id);
-  const encountersById = Object.fromEntries(
-    encounters.content.map((e) => [e.id, e]),
-  );
-  const observationsTruncated =
-    observationsPage.totalElements > observationsPage.content.length;
+
+  // FIRST-RELEASE: encounter, observation and appointment loads are skipped —
+  // nothing on the page consumes them until those features ship.
+  // const [encounters, observationsPage] = patient.voided
+  //   ? [
+  //       {
+  //         content: [] as Awaited<
+  //           ReturnType<typeof listEncountersForPatient>
+  //         >["content"],
+  //       },
+  //       {
+  //         content: [] as Awaited<
+  //           ReturnType<typeof listObservationsForPatient>
+  //         >["content"],
+  //         totalElements: 0,
+  //       },
+  //     ]
+  //   : await Promise.all([
+  //       listEncountersForPatient(patient.id, { size: 20 }),
+  //       listObservationsForPatient(patient.id, { size: 200 }),
+  //     ]);
+  // const [appointmentsPage, recurrences] = patient.voided
+  //   ? [{ content: [] as AppointmentDetail[] }, [] as AppointmentRecurrence[]]
+  //   : await Promise.all([
+  //       listAppointmentsForPatient(patient.id, { size: 20 }),
+  //       listRecurrencesForPatient(patient.id),
+  //     ]);
+  // const encountersById = Object.fromEntries(
+  //   encounters.content.map((e) => [e.id, e]),
+  // );
+  // const observationsTruncated =
+  //   observationsPage.totalElements > observationsPage.content.length;
 
   const fullName = composeFullName(patient.name);
 
@@ -172,7 +180,12 @@ export default async function PatientDetailPage({
           </Section>
         )}
 
-        {patient.voided ? null : (
+        {patient.voided ? null : <DictationsSection dictations={dictations} />}
+
+        {/* FIRST-RELEASE: vitals, encounters, appointments and the clinical
+            timeline are hidden until those features ship. Restore together
+            with the imports and data loads above. */}
+        {/* {patient.voided ? null : (
           <VitalsTrendSection
             patientId={patient.id}
             observations={observationsPage.content}
@@ -184,8 +197,6 @@ export default async function PatientDetailPage({
           encounters={encounters.content}
           canRecord={!patient.voided}
         />
-
-        {patient.voided ? null : <DictationsSection dictations={dictations} />}
 
         <AppointmentsSection
           patientId={patient.id}
@@ -200,7 +211,7 @@ export default async function PatientDetailPage({
             encountersById={encountersById}
             truncated={observationsTruncated}
           />
-        )}
+        )} */}
       </div>
     </div>
   );

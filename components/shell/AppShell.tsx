@@ -44,7 +44,8 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/16/solid";
 import {
-  CalendarDaysIcon,
+  // FIRST-RELEASE: re-enable with the Appointments nav item below.
+  // CalendarDaysIcon,
   Cog6ToothIcon,
   HomeIcon,
   MicrophoneIcon,
@@ -234,13 +235,16 @@ export function AppShell({
                   <UsersIcon />
                   <SidebarLabel>Patients</SidebarLabel>
                 </SidebarItem>
-                <SidebarItem
+                {/* FIRST-RELEASE: scheduling ships after the dictation-only
+                    release. The /appointments routes still exist — this only
+                    hides the entry point from testers. */}
+                {/* <SidebarItem
                   href="/appointments"
                   current={pathname.startsWith("/appointments")}
                 >
                   <CalendarDaysIcon />
                   <SidebarLabel>Appointments</SidebarLabel>
-                </SidebarItem>
+                </SidebarItem> */}
                 <SidebarItem
                   href="/dictation"
                   current={pathname.startsWith("/dictation")}
