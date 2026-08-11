@@ -23,6 +23,7 @@ const TABS = [
   // FIRST-RELEASE: re-enable alongside /appointments.
   // { href: "/settings/scheduling", label: "Scheduling", adminOnly: true },
   { href: "/settings/staff", label: "Staff", adminOnly: true },
+  { href: "/settings/billing", label: "Billing", adminOnly: true },
 ];
 
 export function SettingsTabs({
