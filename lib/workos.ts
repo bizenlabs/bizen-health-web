@@ -14,11 +14,19 @@ import {
 } from "@workos-inc/authkit-nextjs";
 import type { Invitation, OrganizationMembership } from "@workos-inc/node";
 
+import {
+  orgMetadataFrom,
+  orgMetadataToSession,
+  type BillingStatus,
+  type OrgMetadata,
+  type OrgType,
+  type TenantStatus,
+} from "@/lib/workos-metadata";
+
 export { handleAuth, saveSession };
 export const switchToOrganization = authkitSwitchToOrganization;
 
-export type TenantStatus = "active" | "suspended" | "terminated";
-export type OrgType = "individual" | "clinic";
+export type { BillingStatus, OrgType, TenantStatus };
 
 export type SessionClaims = {
   userId: string;
@@ -33,31 +41,28 @@ export type SessionClaims = {
   // The tenant's default transcription language/accent (Deepgram BCP-47 tag,
   // e.g. "en-IN"). Null when unset — callers fall back to the app default.
   transcriptionLanguage: string | null;
+  // Billing state, mirrored into org metadata by core. Available here at zero
+  // extra cost because the proxy already reads metadata on every request.
+  // Display only — Spring is the write boundary.
+  billingStatus: BillingStatus | null;
+  planCode: string | null;
+  billingDeadline: string | null;
   accessToken: string;
 };
 
-type OrgMetadata = {
-  tenant_slug?: string;
-  tenant_status?: TenantStatus;
-  org_type?: OrgType;
-  transcription_language?: string;
-};
-
-// WorkOS replaces org metadata wholesale on every update, so any writer must
-// re-pass the full record or silently drop the other keys. Rebuild it from the
-// session here and let callers override just the field they're changing.
+/**
+ * WorkOS replaces org metadata wholesale on every update, so any writer must
+ * re-pass the full record or silently drop the other keys. Rebuild it from the
+ * session here and let callers override just the field they're changing.
+ *
+ * The implementation lives in `lib/workos-metadata.ts` so it stays free of
+ * `server-only` and is covered by tests — this helper is the single point where
+ * forgetting a key loses tenant state.
+ */
 export function orgMetadataFromSession(
   session: SessionClaims,
 ): Record<string, string> {
-  const meta: Record<string, string> = {
-    tenant_slug: session.tenantSlug ?? "",
-    tenant_status: session.tenantStatus ?? "active",
-    org_type: session.orgType ?? "clinic",
-  };
-  if (session.transcriptionLanguage) {
-    meta.transcription_language = session.transcriptionLanguage;
-  }
-  return meta;
+  return orgMetadataFrom(session);
 }
 
 const fetchOrgMetadata = cache(
@@ -111,10 +116,7 @@ export async function getSession(): Promise<SessionClaims | null> {
     role: info.role ?? null,
     roles: info.roles ?? [],
     permissions: info.permissions ?? [],
-    tenantSlug: meta.tenant_slug ?? null,
-    tenantStatus: meta.tenant_status ?? null,
-    orgType: meta.org_type ?? null,
-    transcriptionLanguage: meta.transcription_language ?? null,
+    ...orgMetadataToSession(meta),
     accessToken: info.accessToken,
   };
 }
@@ -188,10 +190,7 @@ export async function authenticateRequest(request: NextRequest): Promise<{
       role: session.role ?? null,
       roles: session.roles ?? [],
       permissions: session.permissions ?? [],
-      tenantSlug: meta.tenant_slug ?? null,
-      tenantStatus: meta.tenant_status ?? null,
-      orgType: meta.org_type ?? null,
-      transcriptionLanguage: meta.transcription_language ?? null,
+      ...orgMetadataToSession(meta),
       accessToken: session.accessToken,
     },
     responseHeaders: headers,
