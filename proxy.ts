@@ -26,6 +26,7 @@ import { authenticateRequest } from "@/lib/workos";
 // else is treated as part of the authenticated app.
 const PUBLIC_PATHS = new Set([
   "/",
+  "/pricing",
   "/sign-in",
   "/sign-up",
   "/sign-out",

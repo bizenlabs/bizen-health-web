@@ -24,6 +24,7 @@ const navLinks = [
   { href: "/#how", label: "How it works" },
   { href: "/#features", label: "Features" },
   { href: "/#clinics", label: "For clinics" },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 export default function MarketingLayout({
