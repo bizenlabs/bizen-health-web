@@ -47,6 +47,31 @@ export class ForbiddenError extends ApiError {
   }
 }
 
+/**
+ * The tenant's workspace is read-only: its trial ended, a payment failed past
+ * the grace window, or the subscription was cancelled.
+ *
+ * Extends {@link ApiError} on purpose. Every `actions.ts` in the app already
+ * funnels errors through a `run()` helper that converts an `ApiError` into an
+ * inline message, so recognising 402 here gives every existing action correct
+ * behaviour without touching any of them.
+ *
+ * Reads and exports are never gated, so this only ever surfaces on a write.
+ */
+export class BillingReadOnlyError extends ApiError {
+  constructor(problem?: ProblemDetails | null) {
+    super(
+      402,
+      problem?.detail ??
+        "Your workspace is read-only. You can still view and export everything.",
+      problem?.code ?? "BILLING_READ_ONLY",
+      problem?.fields ?? [],
+      problem ?? undefined,
+    );
+    this.name = "BillingReadOnlyError";
+  }
+}
+
 function isProblemDetails(value: unknown): value is ProblemDetails {
   return (
     typeof value === "object" &&
@@ -84,6 +109,10 @@ async function authHeaders(): Promise<Record<string, string>> {
 async function throwForStatus(res: Response): Promise<void> {
   if (res.status === 401) throw new UnauthorizedError();
   if (res.status === 403) throw new ForbiddenError(await readProblem(res));
+  // 402 is unused elsewhere in core, which makes it a clean discriminator for
+  // "billing says no" as distinct from "you lack the role".
+  if (res.status === 402)
+    throw new BillingReadOnlyError(await readProblem(res));
   if (!res.ok) {
     const problem = await readProblem(res);
     throw new ApiError(
